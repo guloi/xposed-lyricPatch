@@ -3,7 +3,6 @@
 > [!WARNING]
 > 这是一个针对DerpFest的系统UI的模块 由AI生成
 
-
 针对 `com.android.systemui` 自带的状态栏歌词（`com.android.systemui.statusbar.phone.*`），
 用 libxposed API 102 往 `LyricSourceFactory#create(String)` 的源列表里插入一个**网易云 + LRCLIB** 的歌词源。
 
@@ -47,6 +46,7 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 # 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
+没有本地 Android SDK 的话，推到 GitHub 用 `.github/workflows/build.yml` 自动出包。
 
 ## 安装 / 启用
 
@@ -88,9 +88,52 @@ translation=true
 - 网易云客户端（`*netease*`）且 `mediaId` 为纯数字时，直接按歌曲 id 取词，不搜索。
 - 结果缓存：命中 6 小时，未命中 10 分钟。
 
+## 自定义源（1.5+）
+
+`providers` 除内置的 `netease` / `lrclib`，可以直接写公网 HTTPS 地址，
+协议与 ROM 内置 `HttpLyricSource` 完全一致：
+
+```properties
+providers=netease,https://lyric-source.soiaii.workers.dev,lrclib
+```
+
+请求：`GET {base}/v1/lyrics?title=&artist=&album=&durationMs=&sourcePackage=&mediaId=`
+
+响应（两种写法都认）：
+
+```json
+{"lrc":"[00:01.00]...","tlyric":"...","yrc":"..."}
+```
+
+```json
+{"lrc":{"lyric":"..."},"tlyric":{"lyric":"..."}}
+```
+
+细节：
+
+- 列表按顺序尝试，第一个返回非空歌词的赢；URL 失败/超时自动跳下一个
+- 只支持 `http://` / `https://`，证书必须有效（默认 TrustManager）
+- 大小写：内置名字不区分大小写，URL 原样使用
+- 改了配置不用重启，下次取词生效（有 mtime 检测）
+
 ## 坑
 
 - 填了自定义源（`status_bar_lyric_sources` 非空）时，ROM 会**丢掉**内置源；
   本模块会自动把自己的源垫底，所以依然有词。
 - 网易云接口是第三方非官方 API，哪天挂了改 `Netease.java` 里两个常量就行。
 - 网络在 SystemUI 的 `mLyricExecutor` 线程池里跑，不会卡主线程。
+
+## 依赖说明（重要）
+
+`io.github.libxposed:api:102` 这个坐标在 Google 仓库 / Maven Central 都拉不到，
+所以本工程**不依赖远程 libxposed 包**，而是在 `apistub/` 里放了一份编译期 stub：
+
+- `compileOnly project(':apistub')` → 只参与编译，不会打进 APK
+- 运行时由 LSPosed 注入的框架类提供真实实现
+- 所有 stub 方法签名都是从已安装的真实 libxposed 模块 smali 里核对出来的：
+  `XposedModule#hook(Executable)`、`HookBuilder#intercept(Hooker)`、
+  `Chain#getArgs():List`、`Chain#proceed(Object[]):Object`、
+  `XposedModule#log(int,String,String,Throwable)`
+
+代价：如果框架大版本改了签名，需要同步改 `apistub/` 里的声明。
+如果以后官方包能正常拉取，把依赖换回 `compileOnly 'io.github.libxposed:api:xxx'` 并删掉 `:apistub` 即可。

@@ -60,16 +60,22 @@ public final class LyricFetcher {
 
         // 2) 按 providers 顺序逐个尝试
         if (bundle == null) {
-            String order = Util.conf("providers", "netease,lrclib").toLowerCase(Locale.ROOT);
+            // 注意：URL 里可能有大小写，只对内置名字做小写化
+            String order = Util.conf("providers", "netease,lrclib");
             for (String raw : order.split(",")) {
                 String provider = raw.trim();
                 if (provider.isEmpty()) continue;
                 if (Thread.currentThread().isInterrupted()) return null;
                 try {
-                    if ("netease".equals(provider)) {
+                    if ("netease".equalsIgnoreCase(provider)) {
                         bundle = Netease.search(title, artist, durationMs, withTranslation);
-                    } else if ("lrclib".equals(provider)) {
+                    } else if ("lrclib".equalsIgnoreCase(provider)) {
                         bundle = Netease.lrcLib(title, artist, album, durationMs);
+                    } else if (provider.startsWith("http://") || provider.startsWith("https://")) {
+                        bundle = HttpSource.fetch(provider, title, artist, album, durationMs,
+                                packageName, mediaId, withTranslation);
+                    } else {
+                        Util.log("unknown provider: " + provider);
                     }
                 } catch (Throwable t) {
                     Util.logw("provider " + provider + " failed", t);

@@ -21,11 +21,15 @@ public final class Util {
             "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) "
                     + "Chrome/126.0.0.0 Mobile Safari/537.36";
 
-    /** 可选配置，缺失则全部用默认值 */
-    private static final String CONF_PATH = "/data/local/tmp/lyricpatch.conf";
+    /** 可选配置，按顺序取第一个能读到的（都不存在就用默认值） */
+    private static final String[] CONF_PATHS = {
+            "/data/system/lyricpatch.conf",
+            "/data/local/tmp/lyricpatch.conf"
+    };
 
     private static Properties sConf;
     private static long sConfMtime = Long.MIN_VALUE;
+    private static boolean sConfLogged;
 
     private Util() {
     }
@@ -58,18 +62,31 @@ public final class Util {
 
     private static synchronized Properties conf() {
         try {
-            File f = new File(CONF_PATH);
-            long mtime = f.canRead() ? f.lastModified() : -1L;
+            File found = null;
+            for (String path : CONF_PATHS) {
+                File f = new File(path);
+                if (f.canRead()) {
+                    found = f;
+                    break;
+                }
+            }
+            long mtime = found == null ? -1L : found.lastModified();
             if (sConf != null && mtime == sConfMtime) return sConf;
 
             Properties p = new Properties();
-            if (f.canRead()) {
-                try (FileInputStream in = new FileInputStream(f)) {
+            if (found != null) {
+                try (FileInputStream in = new FileInputStream(found)) {
                     p.load(in);
                 }
             }
             sConf = p;
             sConfMtime = mtime;
+            if (!sConfLogged) {
+                sConfLogged = true;
+                log("conf: " + (found == null ? "not found (" + CONF_PATHS[0] + ")"
+                        : "loaded " + found.getAbsolutePath())
+                        + " keys=" + p.size());
+            }
         } catch (Throwable t) {
             logw("read conf failed", t);
             if (sConf == null) sConf = new Properties();
