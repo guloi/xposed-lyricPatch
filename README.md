@@ -93,7 +93,7 @@ translation=true
 协议与 ROM 内置 `HttpLyricSource` 完全一致：
 
 ```properties
-providers=netease,https://lyric-source.soiaii.workers.dev,lrclib
+providers=netease,https://example.com,lrclib
 ```
 
 请求：`GET {base}/v1/lyrics?title=&artist=&album=&durationMs=&sourcePackage=&mediaId=`
