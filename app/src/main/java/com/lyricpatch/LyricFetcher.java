@@ -38,8 +38,8 @@ public final class LyricFetcher {
     public static Bundle resolve(String title, String artist, String album, long durationMs,
                                  String packageName, String mediaId) {
         StringBuilder keyBuilder = new StringBuilder();
-        keyBuilder.append(title).append('\u0000').append(artist)
-                .append('\u0000').append(album).append('\u0000').append(durationMs);
+        keyBuilder.append(title).append('\0').append(artist)
+                .append('\0').append(album).append('\0').append(durationMs);
         String key = keyBuilder.toString();
 
         long now = System.currentTimeMillis();
@@ -49,10 +49,10 @@ public final class LyricFetcher {
         boolean withTranslation = Util.confBool("translation", true);
         Bundle bundle = null;
 
-        // 1) 网易云客户端：mediaId 即数字歌曲 id，命中率最高，不用搜索
-        if (isNetease(packageName) && isNumeric(mediaId)) {
+        // 1) mediaId 是纯数字：直接当网易云歌曲 id 试（带标题校验，避免串歌）
+        if (isNumeric(mediaId)) {
             try {
-                bundle = Netease.byId(mediaId, withTranslation);
+                bundle = Netease.byIdVerified(mediaId, title, withTranslation);
             } catch (Throwable t) {
                 Util.logw("netease byId failed", t);
             }
@@ -83,10 +83,6 @@ public final class LyricFetcher {
         CACHE.put(key, new Entry(bundle, now + (bundle == null ? MISS_TTL : OK_TTL)));
         if (CACHE.size() > 128) CACHE.clear();
         return bundle;
-    }
-
-    private static boolean isNetease(String pkg) {
-        return pkg != null && pkg.contains("netease");
     }
 
     private static boolean isNumeric(String s) {

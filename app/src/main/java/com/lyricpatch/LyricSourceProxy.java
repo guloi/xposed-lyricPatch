@@ -58,26 +58,45 @@ public final class LyricSourceProxy implements InvocationHandler {
         return args == null || args.length == 0 ? null : args[0];
     }
 
-    /** enhanced = true 时表示 ROM 的逐字轮（fetchEnhanced） */
+    /** enhanced = true 表示 ROM 的逐字轮（fetchEnhanced） */
     private static Object fetch(Object track, boolean enhanced) {
         try {
             if (track == null || Thread.currentThread().isInterrupted()) return null;
 
             String title = str(track, "title");
-            if (Util.isEmpty(title)) return null;
-
             String artist = str(track, "artist");
             String album = str(track, "album");
             String pkg = str(track, "packageName");
             String mediaId = str(track, "mediaId");
             long duration = lng(track, "durationMs");
 
+            if (Util.isEmpty(title)) {
+                Util.log("skip(no title): pkg=" + pkg + " mediaId=" + mediaId);
+                return null;
+            }
+            Util.log((enhanced ? "track(E): " : "track: ")
+                    + "title=" + title + " | artist=" + artist + " | album=" + album
+                    + " | dur=" + duration + " | pkg=" + pkg + " | mediaId=" + mediaId);
+
             LyricFetcher.Bundle bundle =
                     LyricFetcher.resolve(title, artist, album, duration, pkg, mediaId);
-            if (bundle == null) return null;
+            if (bundle == null) {
+                Util.log((enhanced ? "miss(E): " : "miss: ")
+                        + title + " / " + artist + " dur=" + duration + " pkg=" + pkg);
+                return null;
+            }
 
             Object lyrics = build(bundle, enhanced);
-            if (lyrics == null) return null;
+            if (lyrics == null) {
+                Util.log("parse failed: " + title);
+                return null;
+            }
+            if (!enhanced) {
+                Util.log("hit: " + title + " / " + artist
+                        + " lrc=" + len(bundle.lrc)
+                        + " yrc=" + len(bundle.yrc)
+                        + " tl=" + len(bundle.tlyric));
+            }
             // 逐字轮没有 word timing 就返回 null，让 ROM 走行级那一轮
             if (enhanced && !hasWordTiming(lyrics)) return null;
             return lyrics;
@@ -133,5 +152,9 @@ public final class LyricSourceProxy implements InvocationHandler {
 
     private static String nz(String s) {
         return s == null ? "" : s;
+    }
+
+    private static int len(String s) {
+        return s == null ? 0 : s.length();
     }
 }

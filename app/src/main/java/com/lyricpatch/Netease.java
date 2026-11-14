@@ -11,6 +11,8 @@ public final class Netease {
             "https://music.163.com/api/search/get?s=%s&type=1&offset=0&limit=10";
     private static final String LYRIC =
             "https://music.163.com/api/song/lyric?id=%s&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1";
+    private static final String DETAIL =
+            "https://music.163.com/api/song/detail?ids=%5B%s%5D";
     private static final String LRCLIB_GET =
             "https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d";
     private static final String LRCLIB_SEARCH = "https://lrclib.net/api/search?q=%s";
@@ -18,7 +20,7 @@ public final class Netease {
     private Netease() {
     }
 
-    /** 网易云客户端传入的 mediaId 就是数字歌曲 id，直接取词 */
+    /** 直接按网易云歌曲 id 取词 */
     public static LyricFetcher.Bundle byId(String id, boolean withTranslation) {
         try {
             String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
@@ -29,10 +31,46 @@ public final class Netease {
         }
     }
 
+    /** mediaId 当网易云 id 用：先查 song/detail 校验标题，避免串歌 */
+    public static LyricFetcher.Bundle byIdVerified(String id, String title,
+                                                   boolean withTranslation) {
+        try {
+            String detail = Util.get(String.format(DETAIL, Util.enc(id)), REFERER);
+            if (!Util.isEmpty(detail)) {
+                JSONArray arr = new JSONObject(detail).optJSONArray("songs");
+                if (arr != null && arr.length() > 0) {
+                    JSONObject s = arr.optJSONObject(0);
+                    String name = s == null ? "" : s.optString("name", "");
+                    if (Util.similarity(Util.norm(title), Util.norm(name)) < 0.5) {
+                        Util.log("id " + id + " mismatch [" + name + "] vs [" + title + "], skip");
+                        return null;
+                    }
+                }
+            }
+            return byId(id, withTranslation);
+        } catch (Throwable t) {
+            Util.logw("netease detail failed", t);
+            return null;
+        }
+    }
+
+    /** 带歌手搜不到时，再只用标题重试一次 */
     public static LyricFetcher.Bundle search(String title, String artist, long durationMs,
                                              boolean withTranslation) {
+        String[] keywords = Util.isEmpty(artist)
+                ? new String[]{title}
+                : new String[]{title + " " + artist, title};
+
+        for (String keyword : keywords) {
+            LyricFetcher.Bundle b = searchOnce(keyword, title, artist, durationMs, withTranslation);
+            if (b != null) return b;
+        }
+        return null;
+    }
+
+    private static LyricFetcher.Bundle searchOnce(String keyword, String title, String artist,
+                                                  long durationMs, boolean withTranslation) {
         try {
-            String keyword = Util.isEmpty(artist) ? title : title + " " + artist;
             String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
             if (Util.isEmpty(res)) return null;
 
