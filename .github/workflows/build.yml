@@ -15,8 +15,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # 让 AGP 能自动下载 android-35 平台与 build-tools
-      - uses: android-actions/setup-android@v3
+      # 不装 android-actions/setup-android：新镜像里 sdkmanager 已无 'tools' 包会报错。
+      # ubuntu-latest 自带 SDK 且 licenses 已接受，AGP 会自动补 android-35 平台。
+      - name: Show SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME" || true
 
       - uses: gradle/actions/setup-gradle@v4
         with:
