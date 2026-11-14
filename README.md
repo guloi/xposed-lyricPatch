@@ -1,8 +1,8 @@
 # LyricPatch — SystemUI 状态栏歌词补源模块
 
-```warn
-这是一个针对DerpFest的系统UI的模块 由AI生成
-```
+> [!WARNING]
+> 这是一个针对DerpFest的系统UI的模块 由AI生成
+
 
 针对 `com.android.systemui` 自带的状态栏歌词（`com.android.systemui.statusbar.phone.*`），
 用 libxposed API 102 往 `LyricSourceFactory#create(String)` 的源列表里插入一个**网易云 + LRCLIB** 的歌词源。
