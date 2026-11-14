@@ -71,6 +71,8 @@ public final class LyricFetcher {
                         bundle = Netease.search(title, artist, durationMs, withTranslation);
                     } else if ("lrclib".equalsIgnoreCase(provider)) {
                         bundle = Netease.lrcLib(title, artist, album, durationMs);
+                    } else if ("qq".equalsIgnoreCase(provider)) {
+                        bundle = QQMusic.search(title, artist, durationMs, withTranslation);
                     } else if (provider.startsWith("http://") || provider.startsWith("https://")) {
                         bundle = HttpSource.fetch(provider, title, artist, album, durationMs,
                                 packageName, mediaId, withTranslation);

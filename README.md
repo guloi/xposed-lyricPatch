@@ -46,6 +46,7 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 # 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
+没有本地 Android SDK 的话，推到 GitHub 用 `.github/workflows/build.yml` 自动出包。
 
 ## 安装 / 启用
 
@@ -90,11 +91,11 @@ translation=true
 
 ## 自定义源（1.5+）
 
-`providers` 除内置的 `netease` / `lrclib`，可以直接写公网 HTTPS 地址，
+`providers` 内置可选 `netease` / `qq` / `lrclib`，可以直接写公网 HTTPS 地址，
 协议与 ROM 内置 `HttpLyricSource` 完全一致：
 
 ```properties
-providers=netease,https://example.com,lrclib
+providers=netease,https://lyric-source.soiaii.workers.dev,lrclib
 ```
 
 请求：`GET {base}/v1/lyrics?title=&artist=&album=&durationMs=&sourcePackage=&mediaId=`
