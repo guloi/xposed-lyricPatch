@@ -46,7 +46,6 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 # 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
-没有本地 Android SDK 的话，推到 GitHub 用 `.github/workflows/build.yml` 自动出包。
 
 ## 安装 / 启用
 
