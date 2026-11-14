@@ -13,14 +13,25 @@ import io.github.libxposed.api.XposedModuleInterface;
  * libxposed API 102 入口。
  * 只 hook SystemUI 的 LyricSourceFactory#create(String)，往源列表里插入自己的 LyricSource。
  *
- * 注意：这里刻意不用 param.getPackageName()，而是直接 Class.forName 探测，
- * 避免不同框架版本下方法缺失导致 NoSuchMethodError。
+ * 冗余设计（都不依赖编译期 API 声明）：
+ *  - classloader 用反射从 param 上取（不同框架版本方法名不一样）
+ *  - 用 Class.forName 探测是不是 SystemUI，而不是读 param.getPackageName()
  */
 public final class LyricPatchModule extends XposedModule {
 
     private static final String TAG = "LyricPatch";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
+
+    private static final String[] LOADER_GETTERS = {
+            "getClassLoader",
+            "getDefaultClassLoader",
+            "getModuleClassLoader",
+            "getTargetClassLoader",
+            "getClassloader"
+    };
+
+    private static boolean sLoggedMiss;
 
     @Override
     public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
@@ -30,13 +41,21 @@ public final class LyricPatchModule extends XposedModule {
     @Override
     public void onPackageLoaded(XposedModuleInterface.PackageLoadedParam param) {
         try {
-            ClassLoader cl = param.getClassLoader();
+            ClassLoader cl = resolveClassLoader(param);
+            if (cl == null) {
+                if (!sLoggedMiss) {
+                    sLoggedMiss = true;
+                    log(Log.WARN, TAG, "no classloader getter on " + param.getClass().getName()
+                            + " methods=[" + dumpMethods(param.getClass()) + "]", null);
+                }
+                return;
+            }
 
             Class<?> factory;
             try {
                 factory = Class.forName(CLS_FACTORY, false, cl);
             } catch (Throwable notSystemUi) {
-                return;   // 不是 SystemUI，直接跳过
+                return;   // 不是 SystemUI，安静跳过
             }
 
             Method create = factory.getDeclaredMethod("create", String.class);
@@ -68,5 +87,61 @@ public final class LyricPatchModule extends XposedModule {
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
         }
+    }
+
+    /** 把一个类所有无参方法名拼起来，方便定位框架真实方法名 */
+    private static String dumpMethods(Class<?> type) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (Method m : type.getMethods()) {
+                if (m.getParameterCount() != 0) continue;
+                if (sb.length() > 0) sb.append(',');
+                sb.append(m.getName());
+            }
+        } catch (Throwable ignored) {
+            // ignore
+        }
+        return sb.toString();
+    }
+
+    /** 反射取 classloader，兼容各种命名 */
+    private static ClassLoader resolveClassLoader(Object param) {
+        if (param == null) return null;
+        Class<?> type = param.getClass();
+
+        for (String name : LOADER_GETTERS) {
+            Method m = findNoArgMethod(type, name);
+            if (m == null) continue;
+            try {
+                m.setAccessible(true);
+                Object v = m.invoke(param);
+                if (v instanceof ClassLoader) return (ClassLoader) v;
+            } catch (Throwable ignored) {
+                // 试下一个
+            }
+        }
+        return null;
+    }
+
+    private static Method findNoArgMethod(Class<?> type, String name) {
+        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
+            try {
+                for (Method m : c.getDeclaredMethods()) {
+                    if (m.getName().equals(name) && m.getParameterCount() == 0) return m;
+                }
+            } catch (Throwable ignored) {
+                // 继续找父类
+            }
+        }
+        for (Class<?> itf : type.getInterfaces()) {
+            try {
+                for (Method m : itf.getDeclaredMethods()) {
+                    if (m.getName().equals(name) && m.getParameterCount() == 0) return m;
+                }
+            } catch (Throwable ignored) {
+                // ignore
+            }
+        }
+        return null;
     }
 }
