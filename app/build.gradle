@@ -4,12 +4,13 @@ plugins {
 
 android {
     namespace 'com.lyricpatch'
-    compileSdk 36
+    // 用 35 + AGP 8.7.3 这个确定能跑的组合；我们这个模块用不到 36 的 API
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.lyricpatch"
         minSdk 29
-        targetSdk 36
+        targetSdk 35
         versionCode 1
         versionName "1.0"
     }
@@ -32,7 +33,6 @@ android {
 }
 
 dependencies {
-    // libxposed 102：仅编译期，运行时由框架提供
-    compileOnly 'io.github.libxposed:api:102'
-    compileOnly 'androidx.annotation:annotation:1.9.1'
+    // libxposed API：用工程内的编译期 stub（不进 APK，运行时由框架提供）
+    compileOnly project(':apistub')
 }

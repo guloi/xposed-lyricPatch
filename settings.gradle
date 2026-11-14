@@ -14,4 +14,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "LyricPatch"
+
 include ':app'
+// 编译期 API stub：只用来编译，不打进 APK，运行时由框架提供真实实现
+include ':apistub'

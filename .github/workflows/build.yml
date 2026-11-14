@@ -15,12 +15,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # 让 AGP 能自动下载 android-35 平台与 build-tools
+      - uses: android-actions/setup-android@v3
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
 
       - name: Assemble
-        run: gradle assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
