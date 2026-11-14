@@ -1,0 +1,38 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.lyricpatch'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.lyricpatch"
+        minSdk 29
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // libxposed 102：仅编译期，运行时由框架提供
+    compileOnly 'io.github.libxposed:api:102'
+    compileOnly 'androidx.annotation:annotation:1.9.1'
+}

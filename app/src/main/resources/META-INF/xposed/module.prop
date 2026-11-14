@@ -1,0 +1,6 @@
+minApiVersion=102
+targetApiVersion=102
+staticScope=false
+name=歌词补丁
+description=为 SystemUI 状态栏歌词补充网易云/LRCLIB 数据源
+version=1.0
