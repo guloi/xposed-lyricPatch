@@ -46,7 +46,6 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 # 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
-没有本地 Android SDK 的话，推到 GitHub 用 `.github/workflows/build.yml` 自动出包。
 
 ## 安装 / 启用
 
@@ -95,7 +94,7 @@ translation=true
 协议与 ROM 内置 `HttpLyricSource` 完全一致：
 
 ```properties
-providers=netease,https://lyric-source.soiaii.workers.dev,lrclib
+providers=netease,https://example.com,lrclib
 ```
 
 请求：`GET {base}/v1/lyrics?title=&artist=&album=&durationMs=&sourcePackage=&mediaId=`
