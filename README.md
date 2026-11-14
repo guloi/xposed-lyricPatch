@@ -50,6 +50,7 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 
 ## 安装 / 启用
 
+测试使用derpfest v17 giuliac official
 1. 装 APK
 2. LSPosed 里找到「歌词补丁」→ 启用 → 勾选 **系统界面（com.android.systemui）**
 3. 重启 SystemUI（或重启手机）

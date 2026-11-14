@@ -16,5 +16,8 @@ dependencyResolutionManagement {
 rootProject.name = "LyricPatch"
 
 include ':app'
-// 编译期 API stub：只用来编译，不打进 APK，运行时由框架提供真实实现
-include ':apistub'
+
+// 官方包已可用：io.github.libxposed:api:102.0.0（Maven Central）
+// 离线兜底：解开下面一行，并把 app/build.gradle 的依赖换回
+// compileOnly project(':apistub')
+// include ':apistub'

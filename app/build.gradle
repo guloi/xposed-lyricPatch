@@ -11,8 +11,8 @@ android {
         applicationId "com.lyricpatch"
         minSdk 29
         targetSdk 35
-        versionCode 6
-        versionName "1.5"
+        versionCode 8
+        versionName "1.7"
     }
 
     buildTypes {
@@ -33,6 +33,6 @@ android {
 }
 
 dependencies {
-    // libxposed API：用工程内的编译期 stub（不进 APK，运行时由框架提供）
-    compileOnly project(':apistub')
+    // libxposed API（Maven Central，注意版本号是 102.0.0）
+    compileOnly 'io.github.libxposed:api:102.0.0'
 }
