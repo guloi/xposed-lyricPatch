@@ -1,7 +1,10 @@
 package com.lyricpatch;
 
 import android.util.Log;
+import android.view.View;
+import android.widget.TextSwitcher;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +14,8 @@ import io.github.libxposed.api.XposedModuleInterface;
 
 /**
  * libxposed API 102 入口。
- * 只 hook SystemUI 的 LyricSourceFactory#create(String)，往源列表里插入自己的 LyricSource。
+ * 1) hook SystemUI 的 LyricSourceFactory#create(String)，往源列表里插入自己的 LyricSource。
+ * 2) hook LyricViewController#stopLyric()，顺手清掉上一首残留的翻译副标题（见 hookStopLyric）。
  *
  * 冗余设计（都不依赖编译期 API 声明）：
  *  - classloader 用反射从 param 上取（不同框架版本方法名不一样）
@@ -22,6 +26,10 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
+
+    /** 状态栏歌词控制器：换歌后翻译残影就出在它身上 */
+    private static final String CLS_CONTROLLER =
+            "com.android.systemui.statusbar.phone.LyricViewController";
 
     private static final String[] LOADER_GETTERS = {
             "getClassLoader",
@@ -84,8 +92,73 @@ public final class LyricPatchModule extends XposedModule {
             });
 
             log(Log.INFO, TAG, "hooked " + CLS_FACTORY + "#create", null);
+
+            hookStopLyric(cl);
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
+        }
+    }
+
+    /**
+     * 修 SystemUI 自己的一个 bug：换歌后上一首的翻译会留在状态栏上。
+     *
+     * LyricViewController#stopLyric() 的顺序是：
+     *     mCurrentLyricText = null;
+     *     mCurrentTranslatedText = null;
+     *     setTextForAllHolders(null, null, null, 0);
+     *
+     * 而 setTextForAllHolders 是靠 TextUtils.equals(旧缓存值, 新值) 来决定要不要刷新的，
+     * null 和 null 相等，于是这次「清空」实际什么都没做。
+     *
+     * 主歌词视图后面一定会被新歌的歌词覆盖，看不出异常；翻译副标题
+     * （LyricViewHolder#mSubtitleTextSwitcher）却再没人碰它。下一首没翻译时
+     * Cue.translatedText 依旧是 null，又是 equals(null, null) 跳过刷新，
+     * 于是上一首的翻译就一直挂在那里。
+     *
+     * 所以这里在 stopLyric 之后，按 ROM 自己 setSubtitle(空) 的做法把副标题清一遍。
+     * 注意必须在 proceed 之后做：ROM 的方法是先置 null 再刷新的。
+     */
+    private void hookStopLyric(ClassLoader cl) {
+        try {
+            Class<?> controller = Class.forName(CLS_CONTROLLER, false, cl);
+            Method stop = controller.getDeclaredMethod("stopLyric");
+
+            hook(stop).intercept(chain -> {
+                Object result = chain.proceed();
+                Object self = chain.getThisObject();
+                clearSubtitle(readField(self, "mOverlayLyricViewHolder"));
+                clearSubtitle(readField(self, "mInlineLyricViewHolder"));
+                return result;
+            });
+
+            log(Log.INFO, TAG, "hooked " + CLS_CONTROLLER + "#stopLyric", null);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "hook stopLyric failed", t);
+        }
+    }
+
+    /** 复刻 LyricViewController#setSubtitle(holder, 空字符串) 的行为 */
+    private void clearSubtitle(Object holder) {
+        Object switcher = readField(holder, "mSubtitleTextSwitcher");
+        if (!(switcher instanceof TextSwitcher)) return;
+        try {
+            TextSwitcher ts = (TextSwitcher) switcher;
+            ts.setCurrentText("");
+            ts.setVisibility(View.GONE);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "clear subtitle failed", t);
+        }
+    }
+
+    /** 反射读一个字段（holder 是 SystemUI 的类，不能用强类型） */
+    private static Object readField(Object target, String name) {
+        if (target == null) return null;
+        try {
+            Field f = target.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+            return f.get(target);
+        } catch (Throwable t) {
+            return null;
         }
     }
 
