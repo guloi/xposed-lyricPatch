@@ -95,6 +95,9 @@ hide_empty_translation=true
 # 核弹开关：setSubtitle 永远收到 null，任何翻译都不显示（排查/极度嫌麻烦时用）
 # hide_translation_always=false
 
+# 中文歌词（无假名 & 汉字占多数）不去翻译源要翻译，避免同名错贴（默认开）
+skip_translation_for_chinese=true
+
 # 调试：每行刷新打一条 holder: lyric=… | tl=…
 # debug_log=false
 ```

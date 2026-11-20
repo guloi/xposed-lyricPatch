@@ -152,6 +152,33 @@ public final class Util {
         return t.replaceAll("\\s+", "");
     }
 
+    /**
+     * 粗判「歌词本身就是中文」（不需要再翻）：
+     *  - 出现平假名/片假名 → 日文歌词，需要翻译
+     *  - 无假名、汉字 ≥ 8 且明显多于拉丁字母 → 当中文处理
+     * 中文歌去翻译源搜时，很容易把同名/近似歌的 tlyric 错贴上来，所以直接跳过。
+     */
+    static boolean looksChinese(String s) {
+        if (isEmpty(s)) return false;
+
+        int cjk = 0;
+        int kana = 0;
+        int latin = 0;
+        int n = Math.min(s.length(), 4000);
+        for (int i = 0; i < n; i++) {
+            char c = s.charAt(i);
+            if (c >= '\u3040' && c <= '\u30FF') {
+                kana++;                                  // 平假名 / 片假名
+            } else if (c >= '\u4E00' && c <= '\u9FFF') {
+                cjk++;                                   // 汉字
+            } else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+                latin++;                                 // 拉丁字母
+            }
+        }
+        if (kana > 0) return false;
+        return cjk >= 8 && cjk > latin * 2;
+    }
+
     /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */
     static boolean isNumeric(String s) {
         if (isEmpty(s)) return false;

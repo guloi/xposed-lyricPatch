@@ -94,8 +94,19 @@ public final class LyricFetcher {
 
         if (bundle != null && bundle.empty()) bundle = null;
 
+        // 中文歌词不需要翻译：丢掉源里自带的 tlyric，也不再去 translation_providers 搜。
+        // （中文歌去搜翻译源，很容易把同名/近似歌的 tlyric 错贴到正确歌词上 → 洗不掉的残影）
+        boolean skipTranslation = bundle != null
+                && Util.confBool("skip_translation_for_chinese", true)
+                && Util.looksChinese(bundle.lrc);
+        if (skipTranslation && !Util.isEmpty(bundle.tlyric)) {
+            Util.log("中文歌词，丢弃源自带 tlyric: " + title);
+            bundle.tlyric = null;
+        }
+
         // 翻译单独兜底：主源没带 tlyric 时，按 translation_providers 再要一份
-        if (bundle != null && withTranslation && Util.isEmpty(bundle.tlyric)) {
+        if (bundle != null && withTranslation && !skipTranslation
+                && Util.isEmpty(bundle.tlyric)) {
             try {
                 String aligned = TranslationSource.resolve(title, artist, album, durationMs,
                         packageName, mediaId, bundle.lrc);
