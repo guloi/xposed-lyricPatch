@@ -96,9 +96,19 @@ public final class LyricFetcher {
 
         // 中文歌词不需要翻译：丢掉源里自带的 tlyric，也不再去 translation_providers 搜。
         // （中文歌去搜翻译源，很容易把同名/近似歌的 tlyric 错贴到正确歌词上 → 洗不掉的残影）
-        boolean skipTranslation = bundle != null
-                && Util.confBool("skip_translation_for_chinese", true)
-                && Util.looksChinese(bundle.lrc);
+        // 语言采样：lrc 为空就用 yrc（网易云对部分歌只回 yrc，逐字歌词全在里面）
+        String langSample = null;
+        boolean skipTranslation = false;
+        if (bundle != null && Util.confBool("skip_translation_for_chinese", true)) {
+            langSample = Util.isEmpty(bundle.lrc) ? bundle.yrc : bundle.lrc;
+            skipTranslation = Util.looksChinese(langSample);
+            if (Util.confBool("debug_log", false)) {
+                Util.log("lang: chinese=" + skipTranslation + " sample="
+                        + (langSample == null ? "null" : langSample.length())
+                        + " (lrc=" + (bundle.lrc == null ? 0 : bundle.lrc.length())
+                        + " yrc=" + (bundle.yrc == null ? 0 : bundle.yrc.length()) + ")");
+            }
+        }
         if (skipTranslation && !Util.isEmpty(bundle.tlyric)) {
             Util.log("中文歌词，丢弃源自带 tlyric: " + title);
             bundle.tlyric = null;

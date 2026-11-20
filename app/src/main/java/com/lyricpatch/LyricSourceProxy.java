@@ -112,8 +112,17 @@ public final class LyricSourceProxy implements InvocationHandler {
                 return null;
             }
 
-            // ROM 的 findClosestLine 只认 ±1000ms，跨源翻译常被整行丢掉；我们自己重贴一遍
-            lyrics = attachTranslations(lyrics, bundle.tlyric);
+            String langSample = !Util.isEmpty(bundle.lrc) ? bundle.lrc
+                    : (!Util.isEmpty(bundle.yrc) ? bundle.yrc : cueText(lyrics));
+            boolean chineseLyric = Util.looksChinese(langSample);
+
+            if (chineseLyric) {
+                // 中文歌词：不管翻译从哪来（源自带 / 错贴 / ROM 解析），一律抹掉
+                lyrics = stripTranslations(lyrics);
+            } else {
+                // ROM 的 findClosestLine 只认 ±1000ms，跨源翻译常被整行丢掉；我们自己重贴一遍
+                lyrics = attachTranslations(lyrics, bundle.tlyric);
+            }
 
             // 诊断：拿到 tlyric 但解析后一行翻译都没贴上，就是时间轴对不上
             int cues = cueCount(lyrics);
@@ -150,6 +159,52 @@ public final class LyricSourceProxy implements InvocationHandler {
         Object lyrics = sParseLyrics.invoke(null, json);
         if (lyrics == null) lyrics = sParseLyricText.invoke(null, nz(bundle.lrc));
         return lyrics;
+    }
+
+    /** 把前几行原文拼起来（bundle.lrc 缺失时用来判语言） */
+    private static String cueText(Object lyrics) {
+        Object cuesObj = field(lyrics, "mCues");
+        if (!(cuesObj instanceof Map)) return null;
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (Object cue : ((Map<?, ?>) cuesObj).values()) {
+                String t = readString(cue, "text");
+                if (t == null) continue;
+                sb.append(t).append('\n');
+                if (sb.length() > 2000) break;
+            }
+        } catch (Throwable ignored) {
+            return sb.toString();
+        }
+        return sb.toString();
+    }
+
+    /** 把每行的 translatedText 全置空（中文歌词不需要翻译） */
+    private static Object stripTranslations(Object lyrics) {
+        if (lyrics == null || sCueCtor == null || sLyricsCtor == null) return lyrics;
+        try {
+            Object cuesObj = field(lyrics, "mCues");
+            if (!(cuesObj instanceof TreeMap)) return lyrics;
+
+            boolean any = false;
+            TreeMap<Long, Object> out = new TreeMap<>();
+            for (Object cue : ((TreeMap<?, ?>) cuesObj).values()) {
+                long ts = readLong(cue, "timestampMs");
+                String text = readString(cue, "text");
+                String tr = readString(cue, "translatedText");
+                List<?> words = readList(cue, "words");
+                if (!Util.isEmpty(tr)) any = true;
+                out.put(ts, sCueCtor.newInstance(ts, text, null, words));
+            }
+
+            if (!any) return lyrics;   // 本来就没翻译，不用重建
+
+            Util.log("中文歌词，抹掉 " + out.size() + " 行的翻译");
+            return sLyricsCtor.newInstance(out, field(lyrics, "mUnsyncedLyrics"));
+        } catch (Throwable t) {
+            Util.logw("strip translations failed", t);
+            return lyrics;
+        }
     }
 
     /**
