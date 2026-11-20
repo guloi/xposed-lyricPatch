@@ -2,6 +2,7 @@ package com.lyricpatch;
 
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.TextSwitcher;
 import android.widget.TextView;
 
@@ -264,6 +265,10 @@ public final class LyricPatchModule extends XposedModule {
 
                 Object result = chain.proceed();
 
+                if (Util.confBool("debug_log", false)) {
+                    maybeDumpContainer(self);
+                }
+
                 // ② 这一行没翻译 & 机翻也没给出来 → 干脆不显示（hide_empty_translation）
                 if (noTranslation && Util.confBool("hide_empty_translation", true)) {
                     clearSubtitle(readField(self, "mOverlayLyricViewHolder"));
@@ -294,6 +299,51 @@ public final class LyricPatchModule extends XposedModule {
             }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "hook setTextForAllHolders failed", t);
+        }
+    }
+
+    private static long sLastDumpAt;
+
+    /** 每 5 秒最多 dump 一次视图树，用来看清“那行字”到底是哪个控件 */
+    private void maybeDumpContainer(Object self) {
+        long now = System.currentTimeMillis();
+        if (now - sLastDumpAt < 5000L) return;
+        sLastDumpAt = now;
+
+        Object overlay = readField(self, "mOverlayLyricViewHolder");
+        Object inline = readField(self, "mInlineLyricViewHolder");
+        dumpHolder("overlay", overlay);
+        if (inline != overlay) dumpHolder("inline", inline);
+    }
+
+    private void dumpHolder(String tag, Object holder) {
+        Object container = readField(holder, "mLyricContainer");
+        if (!(container instanceof View)) return;
+        StringBuilder sb = new StringBuilder();
+        dumpView((View) container, sb, 0, 4);
+        log(Log.INFO, TAG, "tree(" + tag + "):" + sb, null);
+    }
+
+    private void dumpView(View v, StringBuilder sb, int depth, int maxDepth) {
+        sb.append('\n');
+        for (int i = 0; i < depth; i++) sb.append("  ");
+        sb.append(v.getClass().getSimpleName())
+                .append(" 0x").append(Integer.toHexString(v.getId()))
+                .append(" vis=").append(v.getVisibility())
+                .append(" h=").append(v.getHeight());
+
+        if (v instanceof TextView) {
+            sb.append(" text='").append(brief(((TextView) v).getText())).append('\'');
+            Object mText = readField(v, "mText");
+            if (mText instanceof String && !((String) mText).isEmpty()) {
+                sb.append(" mText='").append(brief(mText)).append('\'');
+            }
+        }
+
+        if (depth >= maxDepth || !(v instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) v;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            dumpView(group.getChildAt(i), sb, depth + 1, maxDepth);
         }
     }
 
