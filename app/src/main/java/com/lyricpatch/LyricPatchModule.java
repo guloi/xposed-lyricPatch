@@ -159,13 +159,33 @@ public final class LyricPatchModule extends XposedModule {
         if (!(switcher instanceof TextSwitcher)) return;
         try {
             TextSwitcher ts = (TextSwitcher) switcher;
-            ts.setCurrentText("");
-            View next = ts.getNextView();
-            if (next instanceof TextView) ((TextView) next).setText("");
+            silence(ts.getCurrentView());
+            silence(ts.getNextView());
             ts.setVisibility(View.GONE);
+
+            if (Util.confBool("debug_log", false)) {
+                View cur = ts.getCurrentView();
+                CharSequence now = cur instanceof TextView ? ((TextView) cur).getText() : null;
+                log(Log.INFO, TAG, "subtitle cleared: text='" + brief(now)
+                        + "' vis=" + ts.getVisibility(), null);
+            }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "clear subtitle failed", t);
         }
+    }
+
+    /**
+     * 把一个 LyricTextView 真正清空。
+     * 它是自定义 View，onDraw 里是自己画的，用的是它自己的 mText / mOffset，
+     * 所以光 setText("") 不一定够，这几个字段一并抹掉。
+     */
+    private void silence(View v) {
+        if (!(v instanceof TextView)) return;
+        TextView tv = (TextView) v;
+        tv.setText("");
+        writeField(v, "mText", "");      // LyricTextView#mText
+        writeField(v, "mOffset", 0);      // LyricTextView#mOffset
+        writeField(v, "mWordTiming", null);   // 逐字高亮数据也清掉
     }
 
     /** 反射读一个字段（holder 是 SystemUI 的类，不能用强类型） */
