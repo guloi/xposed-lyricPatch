@@ -3,6 +3,7 @@ package com.lyricpatch;
 import android.util.Log;
 import android.view.View;
 import android.widget.TextSwitcher;
+import android.widget.TextView;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -145,13 +146,19 @@ public final class LyricPatchModule extends XposedModule {
         }
     }
 
-    /** 复刻 LyricViewController#setSubtitle(holder, 空字符串) 的行为 */
+    /**
+     * 复刻 setSubtitle(holder, 空) 并顺手把 TextSwitcher 的缓冲视图也清掉。
+     * TextSwitcher 里有两层 TextView（current / next），只清 current 的话，
+     * 下次 setText 动画会把残留的旧译文翻上来。
+     */
     private void clearSubtitle(Object holder) {
         Object switcher = readField(holder, "mSubtitleTextSwitcher");
         if (!(switcher instanceof TextSwitcher)) return;
         try {
             TextSwitcher ts = (TextSwitcher) switcher;
             ts.setCurrentText("");
+            View next = ts.getNextView();
+            if (next instanceof TextView) ((TextView) next).setText("");
             ts.setVisibility(View.GONE);
         } catch (Throwable t) {
             log(Log.WARN, TAG, "clear subtitle failed", t);
@@ -200,11 +207,31 @@ public final class LyricPatchModule extends XposedModule {
 
             hook(setter).intercept(chain -> {
                 List<?> args = chain.getArgs();
+                Object text = args != null && args.size() > 0 ? args.get(0) : null;
                 Object translated = args != null && args.size() > 1 ? args.get(1) : null;
-                if (translated == null) {
-                    writeField(chain.getThisObject(), "mCurrentTranslatedText", "");
+                Object self = chain.getThisObject();
+
+                boolean noTranslation = translated == null
+                        || translated.toString().trim().isEmpty();
+
+                if (Util.confBool("debug_log", false)) {
+                    log(Log.INFO, TAG, "holder: lyric=" + brief(text)
+                            + " | tl=" + brief(translated), null);
                 }
-                return chain.proceed();
+
+                // ① 让 ROM 内部 equals(旧值, 新值) 判不出相等，逼它走清空分支
+                if (noTranslation) {
+                    writeField(self, "mCurrentTranslatedText", "");
+                }
+
+                Object result = chain.proceed();
+
+                // ② 这一行没翻译 & 机翻也没给出来 → 干脆不显示（hide_empty_translation）
+                if (noTranslation && Util.confBool("hide_empty_translation", true)) {
+                    clearSubtitle(readField(self, "mOverlayLyricViewHolder"));
+                    clearSubtitle(readField(self, "mInlineLyricViewHolder"));
+                }
+                return result;
             });
 
             log(Log.INFO, TAG, "hooked " + CLS_CONTROLLER + "#setTextForAllHolders", null);
@@ -213,7 +240,14 @@ public final class LyricPatchModule extends XposedModule {
         }
     }
 
-    private static void writeField(Object target, String name, Object value) {
+    /** 日志里只留前 16 个字符，避免刷屏 */
+    private static String brief(Object o) {
+        if (o == null) return "null";
+        String s = o.toString().replace('\n', ' ');
+        return s.length() <= 16 ? s : s.substring(0, 16) + "…";
+    }
+
+    private static void writeField(Object target, String name, Object value) {    private static void writeField(Object target, String name, Object value) {
         if (target == null) return;
         try {
             Field f = target.getClass().getDeclaredField(name);

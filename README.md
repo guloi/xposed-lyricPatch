@@ -88,6 +88,12 @@ translation_providers=netease,qq
 #   source = 源里有翻译就用源里的（人工翻译），一行都没有才机翻兜底  ← 推荐
 #   off    = 永不机翻（源没翻译的歌就是没翻译，第二行会空白）
 machine_translation=auto
+
+# 某一行没翻译（源没有 + 机翻也没给）时干脆不显示副标题，杜绝残影（默认开）
+hide_empty_translation=true
+
+# 调试：每行刷新打一条 holder: lyric=… | tl=…
+# debug_log=false
 ```
 
 ### 独立翻译源（2.0+）
@@ -167,6 +173,22 @@ providers=netease,https://example.com,lrclib
 万一哪天 Maven Central 又拉不到这个坐标，再临时补一份 stub 就行。
 
 ## 更新记录
+
+### 2.7（versionCode 18）
+
+- 新增 `hide_empty_translation`（默认 `true`）：当前行没有翻译时就**直接不显示副标题**，
+  不再依靠 ROM 的刷新逻辑，也不会留上一首的残影。
+- `clearSubtitle` 现在会把 `TextSwitcher` 的 **current 和 next 两层 TextView 都清空**，
+  避免下次 `setText` 动画把残留的旧译文翻上来（之前只清了 current）。
+- 判空用 `null || trim().isEmpty()`，所以 ROM 传空串也算「没翻译」。
+
+### 2.6（versionCode 17）
+
+- 残影兜底再强一层：`setTextForAllHolders` 里如果翻译参数是 `null`，除了改缓存字段，
+  **proceed 之后直接把两个 holder 的副标题视图抹掉**（`setCurrentText("")` + `GONE`），
+  完全不依赖 ROM 内部的 equals 判断，也不依赖 `stopLyric` 时机。
+- 新增 `debug_log=true`：每次刷新打一行 `holder: lyric=… | tl=…`，
+  能直接看出残影是「数据带了翻译」还是「ROM 自己没清」。
 
 ### 2.5（versionCode 16）
 
