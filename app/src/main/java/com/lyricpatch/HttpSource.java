@@ -52,7 +52,8 @@ public final class HttpSource {
         }
     }
 
-    private static String pick(JSONObject o, String... keys) {
+    /** 从多种写法里取一个非空字符串（包内共享，TranslationSource 也用） */
+    static String pick(JSONObject o, String... keys) {
         for (String k : keys) {
             Object v = o.opt(k);
             if (v instanceof JSONObject) {

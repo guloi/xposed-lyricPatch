@@ -37,16 +37,21 @@ public final class LyricFetcher {
 
     public static Bundle resolve(String title, String artist, String album, long durationMs,
                                  String packageName, String mediaId) {
+        boolean withTranslation = Util.confBool("translation", true);
+
         StringBuilder keyBuilder = new StringBuilder();
         keyBuilder.append(title).append('\0').append(artist)
-                .append('\0').append(album).append('\0').append(durationMs);
+                .append('\0').append(album).append('\0').append(durationMs)
+                // 配置变了就别复用旧结果（否则刚打开翻译还是会吃到无翻译的旧缓存）
+                .append('\0').append(withTranslation)
+                .append('\0').append(Util.conf("providers", "netease,lrclib"))
+                .append('\0').append(Util.conf("translation_providers", ""));
         String key = keyBuilder.toString();
 
         long now = System.currentTimeMillis();
         Entry cached = CACHE.get(key);
         if (cached != null && cached.expireAt > now) return cached.bundle;
 
-        boolean withTranslation = Util.confBool("translation", true);
         Bundle bundle = null;
 
         // 1) mediaId 是纯数字：直接当网易云歌曲 id 试（带标题校验，避免串歌）
@@ -88,6 +93,18 @@ public final class LyricFetcher {
         }
 
         if (bundle != null && bundle.empty()) bundle = null;
+
+        // 翻译单独兜底：主源没带 tlyric 时，按 translation_providers 再要一份
+        if (bundle != null && withTranslation && Util.isEmpty(bundle.tlyric)) {
+            try {
+                String aligned = TranslationSource.resolve(title, artist, album, durationMs,
+                        packageName, mediaId, bundle.lrc);
+                if (!Util.isEmpty(aligned)) bundle.tlyric = aligned;
+            } catch (Throwable t) {
+                Util.logw("tlyric fallback failed", t);
+            }
+        }
+
         CACHE.put(key, new Entry(bundle, now + (bundle == null ? MISS_TTL : OK_TTL)));
         if (CACHE.size() > 128) CACHE.clear();
         return bundle;

@@ -71,12 +71,40 @@ adb shell cmd statusbar lyric clear
 `/data/local/tmp/lyricpatch.conf`（系统 UI 要能读，`chmod 644`），缺失就用默认值：
 
 ```properties
-# 源顺序，逗号分隔：netease / lrclib
+# 主歌词源顺序，逗号分隔：netease / qq / lrclib / https://your.server
 providers=netease,lrclib
 
-# 是否把 tlyric 作为第二行（配合 ROM 的「显示翻译」）
+# 翻译总开关（配合 ROM 的「显示翻译」），false 则完全不请求翻译
 translation=true
+
+# 翻译单独一路：主源没带翻译时，按这个顺序再要一份（留空 = 关闭）
+# 内置：netease / qq；也可以写 http(s) 地址，见下
+# 不写这个键时默认就用 netease
+translation_providers=netease,qq
 ```
+
+### 独立翻译源（2.0+）
+
+主源只管出词，翻译可以来自另一家。典型用法：日系曲子 `lrclib` 容易命中但没翻译，
+而网易云有 tlyric —— 于是 `providers=lrclib` + `translation_providers=netease`。
+
+- 只在**主源没带回翻译**且 `translation=true` 时才去请求，不会白跑；
+- 拿回来的翻译会**重新贴到主歌词的时间轴上**（跨源时间轴常差几十~几百 ms，
+  ROM 的 `findClosestLine` 按时间找最近行，不重新对齐就会整行没翻译），
+  对齐窗口 5 秒，一对一映射、不重复消费；
+- 自定义 HTTP 翻译源两种写法：
+
+```properties
+# ① 带占位符的完整 URL（值会自动 URL 编码）
+#    可用：{title} {artist} {album} {durationMs} {mediaId} {sourcePackage}
+translation_providers=https://my.server/tl?t={title}&a={artist}
+
+# ② 只给 base，自动按内置 HttpLyricSource 协议拼 /v1/lyrics?...
+translation_providers=https://my.server
+```
+
+响应可以是 JSON（取 `tlyric` / `translation` / `translated`，兼容嵌套 `{"tlyric":{"lyric":"..."}}`），
+也可以直接返回 LRC 文本。
 
 ## 实现要点
 
@@ -132,6 +160,16 @@ providers=netease,https://example.com,lrclib
 万一哪天 Maven Central 又拉不到这个坐标，再临时补一份 stub 就行。
 
 ## 更新记录
+
+### 2.0（versionCode 11）
+
+- 新增**独立翻译源**：`translation_providers`（默认 `netease`，可选 `qq` 或 http(s) 地址）。
+  主源没带 tlyric 时会单独去要一份，并重贴到主歌词时间轴上，
+  所以「歌词用 lrclib + 翻译用网易云」这种组合也能对得上。
+- 总开关仍是 `translation`；关掉就完全不发翻译请求。
+- 取词缓存 key 里加入了 `translation` / `providers` / `translation_providers`，
+  改配置后不会吃到旧的无翻译缓存。
+- `HttpSource#pick` 改成包内可见，供翻译源复用。
 
 ### 1.9（versionCode 10）
 

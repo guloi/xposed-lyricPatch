@@ -152,6 +152,15 @@ public final class Util {
         return t.replaceAll("\\s+", "");
     }
 
+    /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */
+    static boolean isNumeric(String s) {
+        if (isEmpty(s)) return false;
+        for (int i = 0; i < s.length(); i++) {
+            if (!Character.isDigit(s.charAt(i))) return false;
+        }
+        return true;
+    }
+
     static double similarity(String a, String b) {
         if (a == null || b == null || a.isEmpty() || b.isEmpty()) return 0;
         if (a.equals(b)) return 1.0;

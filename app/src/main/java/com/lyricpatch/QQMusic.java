@@ -62,6 +62,42 @@ public final class QQMusic {
         }
     }
 
+    /** 只要能翻译（QQ 的 trans 字段），主源不是 QQ 时也能用 */
+    public static String tlyric(String title, String artist, long durationMs) {
+        String[] keywords = Util.isEmpty(artist)
+                ? new String[]{title}
+                : new String[]{title + " " + artist, title};
+
+        for (String keyword : keywords) {
+            try {
+                String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+                if (Util.isEmpty(res)) continue;
+
+                JSONObject data = new JSONObject(res).optJSONObject("data");
+                if (data == null) continue;
+                JSONObject song = data.optJSONObject("song");
+                if (song == null) continue;
+                JSONArray list = song.optJSONArray("list");
+                if (list == null || list.length() == 0) continue;
+
+                String mid = pickBest(list, title, artist, durationMs);
+                if (mid == null) continue;
+
+                String lyr = Util.get(String.format(LYRIC, Util.enc(mid)), REFERER);
+                if (Util.isEmpty(lyr)) continue;
+
+                String tl = decode(new JSONObject(lyr).optString("trans", ""));
+                if (!Util.isEmpty(tl)) {
+                    Util.log("qq tlyric ok -> mid=" + mid + " lines=" + tl.length());
+                    return tl;
+                }
+            } catch (Throwable t) {
+                Util.logw("qq tlyric failed", t);
+            }
+        }
+        return null;
+    }
+
     private static String pickBest(JSONArray list, String title, String artist, long durationMs) {
         String t = Util.norm(title);
         String a = Util.norm(artist);

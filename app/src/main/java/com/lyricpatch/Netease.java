@@ -160,6 +160,56 @@ public final class Netease {
         return bundle;
     }
 
+    /**
+     * 只要能翻译：主源不是网易云时也能拿到 tlyric。
+     * mediaId 是纯数字先当网易云 id（带标题校验，避免串歌），否则按「标题 + 歌手」搜一次。
+     */
+    public static String tlyric(String title, String artist, long durationMs, String mediaId) {
+        try {
+            if (Util.isNumeric(mediaId)) {
+                LyricFetcher.Bundle b = byIdVerified(mediaId, title, true);
+                if (b != null && !Util.isEmpty(b.tlyric)) return b.tlyric;
+            }
+
+            String[] keywords = Util.isEmpty(artist)
+                    ? new String[]{title}
+                    : new String[]{title + " " + artist, title};
+
+            for (String keyword : keywords) {
+                String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+                if (Util.isEmpty(res)) continue;
+
+                JSONObject result = new JSONObject(res).optJSONObject("result");
+                if (result == null) continue;
+                JSONArray songs = result.optJSONArray("songs");
+                if (songs == null || songs.length() == 0) continue;
+
+                String id = pickBest(songs, title, artist, durationMs);
+                if (id == null) continue;
+
+                String tl = tlyricById(id);
+                if (!Util.isEmpty(tl)) {
+                    Util.log("netease tlyric ok -> id=" + id + " lines=" + tl.length());
+                    return tl;
+                }
+            }
+        } catch (Throwable t) {
+            Util.logw("netease tlyric failed", t);
+        }
+        return null;
+    }
+
+    private static String tlyricById(String id) {
+        try {
+            String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
+            if (Util.isEmpty(res)) return null;
+            String tl = sub(new JSONObject(res), "tlyric");
+            return Util.isEmpty(tl) ? null : tl;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     /** 标题相似度为主，歌手/时长校正 */
     private static String pickBest(JSONArray songs, String title, String artist, long durationMs) {
         String t = Util.norm(title);
