@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
@@ -30,6 +31,10 @@ public final class LyricPatchModule extends XposedModule {
     /** 状态栏歌词控制器：换歌后翻译残影就出在它身上 */
     private static final String CLS_CONTROLLER =
             "com.android.systemui.statusbar.phone.LyricViewController";
+
+    /** ROM 的「显示翻译」：设备端模型 / 联网机翻，优先级高于源里自带的 tlyric */
+    private static final String CLS_TRANSLATOR =
+            "com.android.systemui.statusbar.phone.LyricTranslator";
 
     private static final String[] LOADER_GETTERS = {
             "getClassLoader",
@@ -94,6 +99,7 @@ public final class LyricPatchModule extends XposedModule {
             log(Log.INFO, TAG, "hooked " + CLS_FACTORY + "#create", null);
 
             hookStopLyric(cl);
+            hookTranslator(cl);
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
         }
@@ -160,6 +166,69 @@ public final class LyricPatchModule extends XposedModule {
         } catch (Throwable t) {
             return null;
         }
+    }
+
+    /**
+     * ROM 的「显示翻译」走 LyricTranslator.apply()：逐行先机翻，只有机翻这一行返回空、
+     * 且目标语言是中文时，才回退用 Cue.translatedText（也就是我们给的网易云/QQ 翻译）。
+     * 所以配了 translation_providers 却看不到效果，就是因为机翻把它盖住了。
+     *
+     * 两个开关（lyricpatch.conf，改完下次取词就生效）：
+     *   prefer_source_translation=true     源里已有翻译就不机翻（保住人工翻译）
+     *   disable_machine_translation=true   完全禁掉机翻（省流量，源没翻译的歌就只剩原文一行）
+     *
+     * 两者都只影响「第二行显示什么」，取词逻辑不变；默认都是 false，完全不碰 ROM 原本行为。
+     */
+    private void hookTranslator(ClassLoader cl) {
+        try {
+            Class<?> translator = Class.forName(CLS_TRANSLATOR, false, cl);
+
+            // 不硬写参数类型（Context / Lyrics 都是 SystemUI 侧的），按名字+参数个数找
+            Method apply = null;
+            for (Method m : translator.getDeclaredMethods()) {
+                if (m.getName().equals("apply") && m.getParameterCount() == 5) {
+                    apply = m;
+                    break;
+                }
+            }
+            if (apply == null) {
+                log(Log.WARN, TAG, "LyricTranslator#apply not found", null);
+                return;
+            }
+
+            final Method target = apply;
+            hook(target).intercept(chain -> {
+                // 用 getArgs() 而不是 getArg(int)：不同框架版本这两个方法的可用性不一样
+                List<?> args = chain.getArgs();
+                Object lyrics = args != null && args.size() > 2 ? args.get(2) : null;
+                if (lyrics == null) return chain.proceed();
+
+                if (Util.confBool("disable_machine_translation", false)) return lyrics;
+                if (Util.confBool("prefer_source_translation", false) && hasTranslation(lyrics)) {
+                    return lyrics;
+                }
+                return chain.proceed();
+            });
+
+            log(Log.INFO, TAG, "hooked " + CLS_TRANSLATOR + "#apply", null);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "hook LyricTranslator failed", t);
+        }
+    }
+
+    /** 源里是否已经有任何一行的翻译（Cue#translatedText） */
+    private static boolean hasTranslation(Object lyrics) {
+        Object cues = readField(lyrics, "mCues");
+        if (!(cues instanceof Map)) return false;
+        try {
+            for (Object cue : ((Map<?, ?>) cues).values()) {
+                Object t = readField(cue, "translatedText");
+                if (t instanceof CharSequence && t.toString().trim().length() > 0) return true;
+            }
+        } catch (Throwable ignored) {
+            // 读不到就当没有
+        }
+        return false;
     }
 
     /** 把一个类所有无参方法名拼起来，方便定位框架真实方法名 */

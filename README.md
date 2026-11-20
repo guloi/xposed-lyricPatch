@@ -81,6 +81,13 @@ translation=true
 # 内置：netease / qq；也可以写 http(s) 地址，见下
 # 不写这个键时默认就用 netease
 translation_providers=netease,qq
+
+# ROM 设置的「显示翻译」是设备端模型 / 联网机翻，优先级**高于**本模块给的翻译。
+# 想优先用源里的人工翻译（网易云/QQ），打开下面这个：
+prefer_source_translation=false
+
+# 想彻底关掉机翻（省流量 / 避免机翻毁意境，代价：源没翻译的歌只剩原文一行）：
+disable_machine_translation=false
 ```
 
 ### 独立翻译源（2.0+）
@@ -160,6 +167,15 @@ providers=netease,https://example.com,lrclib
 万一哪天 Maven Central 又拉不到这个坐标，再临时补一份 stub 就行。
 
 ## 更新记录
+
+### 2.1（versionCode 12）
+
+- 新增 `prefer_source_translation` / `disable_machine_translation`：
+  ROM 的「显示翻译」（设置里的“翻译在设备上完成”）是 `LyricTranslator.apply()` 做的，
+  逻辑是**逐行先机翻**，只有机翻这行返回空、且目标语言是中文时，才回退用
+  `Cue.translatedText`（也就是本模块给的 tlyric）。所以配了 `translation_providers`
+  却看不到人工翻译，就是被机翻盖住了；这两个开关让源翻译优先或彻底禁用机翻。
+- 两个开关都是读配置文件（mtime 变就生效），默认 `false`，不碰 ROM 原本行为。
 
 ### 2.0（versionCode 11）
 
