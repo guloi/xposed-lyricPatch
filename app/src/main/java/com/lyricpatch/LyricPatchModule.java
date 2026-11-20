@@ -247,7 +247,7 @@ public final class LyricPatchModule extends XposedModule {
         return s.length() <= 16 ? s : s.substring(0, 16) + "…";
     }
 
-    private static void writeField(Object target, String name, Object value) {    private static void writeField(Object target, String name, Object value) {
+    private static void writeField(Object target, String name, Object value) {
         if (target == null) return;
         try {
             Field f = target.getClass().getDeclaredField(name);
