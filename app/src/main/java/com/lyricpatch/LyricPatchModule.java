@@ -159,19 +159,34 @@ public final class LyricPatchModule extends XposedModule {
         if (!(switcher instanceof TextSwitcher)) return;
         try {
             TextSwitcher ts = (TextSwitcher) switcher;
+
+            // 清之前先看看里面到底有没有东西（getText 和自绘字段 mText 都算）
+            String before = subtitleText(ts.getCurrentView());
+            if (Util.isEmpty(before)) before = subtitleText(ts.getNextView());
+
             silence(ts.getCurrentView());
             silence(ts.getNextView());
             ts.setVisibility(View.GONE);
 
-            if (Util.confBool("debug_log", false)) {
-                View cur = ts.getCurrentView();
-                CharSequence now = cur instanceof TextView ? ((TextView) cur).getText() : null;
-                log(Log.INFO, TAG, "subtitle cleared: text='" + brief(now)
-                        + "' vis=" + ts.getVisibility(), null);
+            // 只在意「真的擦掉了东西」的时候打日志，平时不吵
+            if (!Util.isEmpty(before)) {
+                log(Log.INFO, TAG, "cleared subtitle: '" + brief(before) + "'", null);
             }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "clear subtitle failed", t);
         }
+    }
+
+    /** 读一个副标题 view 当前“看得见的内容”：getText + LyricTextView 的自绘 mText */
+    private static String subtitleText(View v) {
+        if (!(v instanceof TextView)) return null;
+        CharSequence t = ((TextView) v).getText();
+        String text = t == null ? null : t.toString().trim();
+        Object mText = readField(v, "mText");
+        if (mText instanceof String && !((String) mText).trim().isEmpty()) {
+            return (String) mText;
+        }
+        return text;
     }
 
     /**
