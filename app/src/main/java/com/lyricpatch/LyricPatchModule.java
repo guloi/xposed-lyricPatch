@@ -100,6 +100,7 @@ public final class LyricPatchModule extends XposedModule {
             log(Log.INFO, TAG, "hooked " + CLS_FACTORY + "#create", null);
 
             hookStopLyric(cl);
+            hookHolderText(cl);
             hookTranslator(cl);
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
@@ -166,6 +167,60 @@ public final class LyricPatchModule extends XposedModule {
             return f.get(target);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /**
+     * 兜死「上一首翻译残影」。
+     *
+     * LyricViewController#setTextForAllHolders 是用
+     *     TextUtils.equals(旧缓存, 新值)
+     * 来决定要不要刷新的，而 stopLyric() 会把 mCurrentTranslatedText 置 null。
+     * 于是下一首没翻译时：equals(null, null) 为 true → 副标题直接跳过刷新
+     * → 屏幕上留的还是上一首的翻译（主歌词因为必定不同所以看不出问题）。
+     *
+     * 这里在调用前把缓存字段改成空串（非 null），让 equals("", null) 为 false，
+     * 内部的 setSubtitle(holder, null) 就会老老实实把副标题清空 + 隐藏。
+     */
+    private void hookHolderText(ClassLoader cl) {
+        try {
+            Class<?> controller = Class.forName(CLS_CONTROLLER, false, cl);
+
+            Method setter = null;
+            for (Method m : controller.getDeclaredMethods()) {
+                if (m.getName().equals("setTextForAllHolders") && m.getParameterCount() == 4) {
+                    setter = m;
+                    break;
+                }
+            }
+            if (setter == null) {
+                log(Log.WARN, TAG, "setTextForAllHolders not found", null);
+                return;
+            }
+
+            hook(setter).intercept(chain -> {
+                List<?> args = chain.getArgs();
+                Object translated = args != null && args.size() > 1 ? args.get(1) : null;
+                if (translated == null) {
+                    writeField(chain.getThisObject(), "mCurrentTranslatedText", "");
+                }
+                return chain.proceed();
+            });
+
+            log(Log.INFO, TAG, "hooked " + CLS_CONTROLLER + "#setTextForAllHolders", null);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "hook setTextForAllHolders failed", t);
+        }
+    }
+
+    private static void writeField(Object target, String name, Object value) {
+        if (target == null) return;
+        try {
+            Field f = target.getClass().getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(target, value);
+        } catch (Throwable ignored) {
+            // 改不了就算了，最多保留旧行为
         }
     }
 

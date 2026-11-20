@@ -168,6 +168,16 @@ providers=netease,https://example.com,lrclib
 
 ## 更新记录
 
+### 2.5（versionCode 16）
+
+- **彻底修翻译残影**：不再只靠 `stopLyric()` 清场，改成 hook
+  `LyricViewController#setTextForAllHolders`：只要这次刷新的翻译参数是 `null`，
+  就先把 `mCurrentTranslatedText` 改成空串，让内部的 `TextUtils.equals("", null)` 为 false，
+  强制走 `setSubtitle(holder, null)` 把副标题清空。
+  这样无论换歌、同一首中途没翻译、还是停止/重启，都不可能再留着上一首的翻译。
+- 典型现象（已修）：中文歌 `烂尾` 下面挂着上一首日文歌的翻译「稍微等下！中学生」。
+- 中文歌不会有机翻（`sameLocale` 直接 `withoutTranslations()`），所以这种残影必然是上次没清。
+
 ### 2.4（versionCode 15）
 
 - **修「关掉机翻后翻译整个消失」**：不再依赖 ROM 的 `findClosestLine`（只认 ±1000ms）。
