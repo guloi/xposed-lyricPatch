@@ -336,16 +336,23 @@ public final class LyricSourceProxy implements InvocationHandler {
         return n;
     }
 
-    /** 反射读字段（Lyrics / Cue 都是 SystemUI 的类） */
+    /** 反射读字段（Lyrics / Cue 都是 SystemUI 的类；沿继承链找，避免子类拿不到父类字段） */
     private static Object field(Object target, String name) {
         if (target == null) return null;
         try {
-            Field f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            return f.get(target);
-        } catch (Throwable t) {
-            return null;
+            for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+                try {
+                    Field f = c.getDeclaredField(name);
+                    f.setAccessible(true);
+                    return f.get(target);
+                } catch (NoSuchFieldException ignored) {
+                    // 往父类找
+                }
+            }
+        } catch (Throwable ignored) {
+            // ignore
         }
+        return null;
     }
 
     private static boolean hasWordTiming(Object lyrics) {

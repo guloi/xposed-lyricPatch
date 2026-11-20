@@ -30,7 +30,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "2.8";
+    private static final String VERSION = "3.2";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -204,11 +204,30 @@ public final class LyricPatchModule extends XposedModule {
         writeField(v, "mWordTiming", null);   // 逐字高亮数据也清掉
     }
 
-    /** 反射读一个字段（holder 是 SystemUI 的类，不能用强类型） */
+    /**
+     * 沿继承链找字段。
+     *
+     * 注意：实例的真实类型往往是子类（如 HomeStatusBarViewBinderImpl$LyricController），
+     * 而 mOverlayLyricViewHolder / mCurrentTranslatedText 都声明在父类 LyricViewController 上，
+     * 只用 getClass().getDeclaredField() 会全部拿不到 → 所有读写静默失败。
+     */
+    private static Field findField(Object target, String name) {
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                return c.getDeclaredField(name);
+            } catch (Throwable ignored) {
+                // 没有得到就继续往父类找
+            }
+        }
+        return null;
+    }
+
+    /** 反射读一个字段（holder / controller 都是 SystemUI 的类，不能用强类型） */
     private static Object readField(Object target, String name) {
         if (target == null) return null;
         try {
-            Field f = target.getClass().getDeclaredField(name);
+            Field f = findField(target, name);
+            if (f == null) return null;
             f.setAccessible(true);
             return f.get(target);
         } catch (Throwable t) {
@@ -318,7 +337,10 @@ public final class LyricPatchModule extends XposedModule {
 
     private void dumpHolder(String tag, Object holder) {
         Object container = readField(holder, "mLyricContainer");
-        if (!(container instanceof View)) return;
+        if (!(container instanceof View)) {
+            log(Log.WARN, TAG, "tree(" + tag + "): 拿不到 container（holder=" + holder + "）", null);
+            return;
+        }
         StringBuilder sb = new StringBuilder();
         dumpView((View) container, sb, 0, 4);
         log(Log.INFO, TAG, "tree(" + tag + "):" + sb, null);
@@ -357,7 +379,8 @@ public final class LyricPatchModule extends XposedModule {
     private static void writeField(Object target, String name, Object value) {
         if (target == null) return;
         try {
-            Field f = target.getClass().getDeclaredField(name);
+            Field f = findField(target, name);
+            if (f == null) return;
             f.setAccessible(true);
             f.set(target, value);
         } catch (Throwable ignored) {
