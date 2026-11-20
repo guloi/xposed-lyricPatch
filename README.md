@@ -123,17 +123,27 @@ providers=netease,https://example.com,lrclib
 - 网易云接口是第三方非官方 API，哪天挂了改 `Netease.java` 里两个常量就行。
 - 网络在 SystemUI 的 `mLyricExecutor` 线程池里跑，不会卡主线程。
 
-## 依赖说明（重要）
+## 依赖说明
 
-`io.github.libxposed:api:102` 这个坐标在 Google 仓库 / Maven Central 都拉不到，
-所以本工程**不依赖远程 libxposed 包**，而是在 `apistub/` 里放了一份编译期 stub：
+- 编译期：`compileOnly 'io.github.libxposed:api:102.0.0'`（Maven Central），只参与编译，不会打进 APK
+- 运行时：由 LSPosed / 框架注入的真实 `libxposed` 类提供实现
+- 早期官方坐标拉不到时用过的本地桩 `apistub/` 已删除（`settings.gradle` 里只剩 `include ':app'`）
 
-- `compileOnly project(':apistub')` → 只参与编译，不会打进 APK
-- 运行时由 LSPosed 注入的框架类提供真实实现
-- 所有 stub 方法签名都是从已安装的真实 libxposed 模块 smali 里核对出来的：
-  `XposedModule#hook(Executable)`、`HookBuilder#intercept(Hooker)`、
-  `Chain#getArgs():List`、`Chain#proceed(Object[]):Object`、
-  `XposedModule#log(int,String,String,Throwable)`
+万一哪天 Maven Central 又拉不到这个坐标，再临时补一份 stub 就行。
 
-代价：如果框架大版本改了签名，需要同步改 `apistub/` 里的声明。
-如果以后官方包能正常拉取，把依赖换回 `compileOnly 'io.github.libxposed:api:xxx'` 并删掉 `:apistub` 即可。
+## 更新记录
+
+### 1.9（versionCode 10）
+
+- 修 SystemUI 自己的一个漏：`LyricViewController#stopLyric()` 先把
+  `mCurrentLyricText` / `mCurrentTranslatedText` 置 `null`，再调
+  `setTextForAllHolders(null, null, null, 0)`；而 `setTextForAllHolders` 是靠
+  `TextUtils.equals(旧缓存值, 新值)` 判断要不要刷新的，`null == null` 成立，
+  于是这次「清空」变成了空操作。主歌词会被新歌的歌词覆盖、看不出来，
+  翻译副标题（`LyricViewHolder#mSubtitleTextSwitcher`）却再没人碰过它；
+  下一首没翻译时 `Cue.translatedText` 依旧是 `null`，又跳过刷新，
+  上一首的翻译就挂在状态栏上了。
+- 现在额外 hook `LyricViewController#stopLyric()`，在其返回后按 ROM 自己的
+  `setSubtitle(holder, "")` 逻辑把两个 holder 的副标题清掉
+  （`setCurrentText("")` + `setVisibility(GONE)`）。
+- 与该 hook 无关的取词逻辑未动；ROM 内置源命中时同样生效喵。

@@ -16,8 +16,3 @@ dependencyResolutionManagement {
 rootProject.name = "LyricPatch"
 
 include ':app'
-
-// 官方包已可用：io.github.libxposed:api:102.0.0（Maven Central）
-// 离线兜底：解开下面一行，并把 app/build.gradle 的依赖换回
-// compileOnly project(':apistub')
-// include ':apistub'
