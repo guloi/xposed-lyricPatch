@@ -92,6 +92,9 @@ machine_translation=auto
 # 某一行没翻译（源没有 + 机翻也没给）时干脆不显示副标题，杜绝残影（默认开）
 hide_empty_translation=true
 
+# 核弹开关：setSubtitle 永远收到 null，任何翻译都不显示（排查/极度嫌麻烦时用）
+# hide_translation_always=false
+
 # 调试：每行刷新打一条 holder: lyric=… | tl=…
 # debug_log=false
 ```
@@ -172,91 +175,3 @@ providers=netease,https://example.com,lrclib
 
 万一哪天 Maven Central 又拉不到这个坐标，再临时补一份 stub 就行。
 
-## 更新记录
-
-### 2.7（versionCode 18）
-
-- 新增 `hide_empty_translation`（默认 `true`）：当前行没有翻译时就**直接不显示副标题**，
-  不再依靠 ROM 的刷新逻辑，也不会留上一首的残影。
-- `clearSubtitle` 现在会把 `TextSwitcher` 的 **current 和 next 两层 TextView 都清空**，
-  避免下次 `setText` 动画把残留的旧译文翻上来（之前只清了 current）。
-- 判空用 `null || trim().isEmpty()`，所以 ROM 传空串也算「没翻译」。
-
-### 2.6（versionCode 17）
-
-- 残影兜底再强一层：`setTextForAllHolders` 里如果翻译参数是 `null`，除了改缓存字段，
-  **proceed 之后直接把两个 holder 的副标题视图抹掉**（`setCurrentText("")` + `GONE`），
-  完全不依赖 ROM 内部的 equals 判断，也不依赖 `stopLyric` 时机。
-- 新增 `debug_log=true`：每次刷新打一行 `holder: lyric=… | tl=…`，
-  能直接看出残影是「数据带了翻译」还是「ROM 自己没清」。
-
-### 2.5（versionCode 16）
-
-- **彻底修翻译残影**：不再只靠 `stopLyric()` 清场，改成 hook
-  `LyricViewController#setTextForAllHolders`：只要这次刷新的翻译参数是 `null`，
-  就先把 `mCurrentTranslatedText` 改成空串，让内部的 `TextUtils.equals("", null)` 为 false，
-  强制走 `setSubtitle(holder, null)` 把副标题清空。
-  这样无论换歌、同一首中途没翻译、还是停止/重启，都不可能再留着上一首的翻译。
-- 典型现象（已修）：中文歌 `烂尾` 下面挂着上一首日文歌的翻译「稍微等下！中学生」。
-- 中文歌不会有机翻（`sameLocale` 直接 `withoutTranslations()`），所以这种残影必然是上次没清。
-
-### 2.4（versionCode 15）
-
-- **修「关掉机翻后翻译整个消失」**：不再依赖 ROM 的 `findClosestLine`（只认 ±1000ms）。
-  解析完 `Lyrics` 后，模块自己用反射重建 `Cue`/`Lyrics`，按 1.5s 窗口把 `tlyric` 重贴一遍；
-  实在对不上但行数一致时按行号硬对；已有翻译的行不动。
-- 日志：`attach: matched=N existing=M total=T`，0 命中时打 `attach: 0/T 未能在 ±1500ms 内对上`。
-- 顺带修了上一版用 insert 方式写文件时叠出来的两行重复声明（会编译不过）。
-
-### 2.3（versionCode 14）
-
-- 诊断日志：解析完 Lyrics 后打印 `parsed: 曲名 cues=N translated=M (bundle tl=X)`，
-  能直接看出「拿到了 tlyric 但一行都没贴上去」还是「根本没取到 tlyric」。
-  后者打 `WARN: tlyric 拿到了，但解析后一行翻译都没贴上（findClosestLine 限制 1s）`。
-- 补充一条 ROM 事实：`LyricResponseParser#findClosestLine` 只在最近一行偏差 **≤ 1000ms**
-  时才认这行翻译，所以跨源翻译必须重新对齐时间轴（2.0 已做）。
-
-### 2.2（versionCode 13）
-
-- `prefer_source_translation` / `disable_machine_translation` 合并成三档
-  `machine_translation=auto|source|off`（老的两个布尔键仍然兼容）。
-- 明确一个事实：第二行翻译只有两个来源——源里的 `translatedText` 和
-  `LyricTranslator.apply()` 的机翻。所以 `off` 时如果源里一行翻译都没有，
-  就是**真的没有翻译**（这是预期行为，不是 bug）；想保留人工翻译又不想全空，用 `source`。
-- 跳机翻时会打日志：`use source translation, skip machine translation: N/M`
-  或 `no source translation, fallback to machine translation`，一眼看出源翻译有没有命中。
-- `TranslationSource` 对齐兜底：一行都对不上时不再丢弃，改为原样交给 ROM。
-
-### 2.1（versionCode 12）
-
-- 新增 `prefer_source_translation` / `disable_machine_translation`：
-  ROM 的「显示翻译」（设置里的“翻译在设备上完成”）是 `LyricTranslator.apply()` 做的，
-  逻辑是**逐行先机翻**，只有机翻这行返回空、且目标语言是中文时，才回退用
-  `Cue.translatedText`（也就是本模块给的 tlyric）。所以配了 `translation_providers`
-  却看不到人工翻译，就是被机翻盖住了；这两个开关让源翻译优先或彻底禁用机翻。
-- 两个开关都是读配置文件（mtime 变就生效），默认 `false`，不碰 ROM 原本行为。
-
-### 2.0（versionCode 11）
-
-- 新增**独立翻译源**：`translation_providers`（默认 `netease`，可选 `qq` 或 http(s) 地址）。
-  主源没带 tlyric 时会单独去要一份，并重贴到主歌词时间轴上，
-  所以「歌词用 lrclib + 翻译用网易云」这种组合也能对得上。
-- 总开关仍是 `translation`；关掉就完全不发翻译请求。
-- 取词缓存 key 里加入了 `translation` / `providers` / `translation_providers`，
-  改配置后不会吃到旧的无翻译缓存。
-- `HttpSource#pick` 改成包内可见，供翻译源复用。
-
-### 1.9（versionCode 10）
-
-- 修 SystemUI 自己的一个漏：`LyricViewController#stopLyric()` 先把
-  `mCurrentLyricText` / `mCurrentTranslatedText` 置 `null`，再调
-  `setTextForAllHolders(null, null, null, 0)`；而 `setTextForAllHolders` 是靠
-  `TextUtils.equals(旧缓存值, 新值)` 判断要不要刷新的，`null == null` 成立，
-  于是这次「清空」变成了空操作。主歌词会被新歌的歌词覆盖、看不出来，
-  翻译副标题（`LyricViewHolder#mSubtitleTextSwitcher`）却再没人碰过它；
-  下一首没翻译时 `Cue.translatedText` 依旧是 `null`，又跳过刷新，
-  上一首的翻译就挂在状态栏上了。
-- 现在额外 hook `LyricViewController#stopLyric()`，在其返回后按 ROM 自己的
-  `setSubtitle(holder, "")` 逻辑把两个 holder 的副标题清掉
-  （`setCurrentText("")` + `setVisibility(GONE)`）。
-- 与该 hook 无关的取词逻辑未动；ROM 内置源命中时同样生效喵。

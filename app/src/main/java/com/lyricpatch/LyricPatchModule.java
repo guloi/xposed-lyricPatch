@@ -27,6 +27,9 @@ import io.github.libxposed.api.XposedModuleInterface;
 public final class LyricPatchModule extends XposedModule {
 
     private static final String TAG = "LyricPatch";
+
+    /** 日志里会打出来，方便确认装的是哪一版 */
+    private static final String VERSION = "2.8";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -50,7 +53,7 @@ public final class LyricPatchModule extends XposedModule {
 
     @Override
     public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
-        log(Log.INFO, TAG, "module loaded", null);
+        log(Log.INFO, TAG, "module loaded v" + VERSION, null);
     }
 
     @Override
@@ -235,6 +238,25 @@ public final class LyricPatchModule extends XposedModule {
             });
 
             log(Log.INFO, TAG, "hooked " + CLS_CONTROLLER + "#setTextForAllHolders", null);
+
+            // 核弹开关：想看看到底是不是这行字在作怪时用
+            // hide_translation_always=true → setSubtitle 永远收到 null，任何翻译都不显示
+            Method subtitle = null;
+            for (Method m : controller.getDeclaredMethods()) {
+                if (m.getName().equals("setSubtitle") && m.getParameterCount() == 2) {
+                    subtitle = m;
+                    break;
+                }
+            }
+            if (subtitle != null) {
+                hook(subtitle).intercept(chain -> {
+                    if (!Util.confBool("hide_translation_always", false)) return chain.proceed();
+                    List<?> args = chain.getArgs();
+                    if (args == null || args.size() < 2) return chain.proceed();
+                    return chain.proceed(new Object[]{args.get(0), null});
+                });
+                log(Log.INFO, TAG, "hooked " + CLS_CONTROLLER + "#setSubtitle", null);
+            }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "hook setTextForAllHolders failed", t);
         }
