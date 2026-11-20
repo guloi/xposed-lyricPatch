@@ -83,11 +83,11 @@ translation=true
 translation_providers=netease,qq
 
 # ROM 设置的「显示翻译」是设备端模型 / 联网机翻，优先级**高于**本模块给的翻译。
-# 想优先用源里的人工翻译（网易云/QQ），打开下面这个：
-prefer_source_translation=false
-
-# 想彻底关掉机翻（省流量 / 避免机翻毁意境，代价：源没翻译的歌只剩原文一行）：
-disable_machine_translation=false
+# machine_translation 三档：
+#   auto   = ROM 原行为（机翻优先，源翻译只补机翻失败的行）—— 默认
+#   source = 源里有翻译就用源里的（人工翻译），一行都没有才机翻兜底  ← 推荐
+#   off    = 永不机翻（源没翻译的歌就是没翻译，第二行会空白）
+machine_translation=auto
 ```
 
 ### 独立翻译源（2.0+）
@@ -167,6 +167,33 @@ providers=netease,https://example.com,lrclib
 万一哪天 Maven Central 又拉不到这个坐标，再临时补一份 stub 就行。
 
 ## 更新记录
+
+### 2.4（versionCode 15）
+
+- **修「关掉机翻后翻译整个消失」**：不再依赖 ROM 的 `findClosestLine`（只认 ±1000ms）。
+  解析完 `Lyrics` 后，模块自己用反射重建 `Cue`/`Lyrics`，按 1.5s 窗口把 `tlyric` 重贴一遍；
+  实在对不上但行数一致时按行号硬对；已有翻译的行不动。
+- 日志：`attach: matched=N existing=M total=T`，0 命中时打 `attach: 0/T 未能在 ±1500ms 内对上`。
+- 顺带修了上一版用 insert 方式写文件时叠出来的两行重复声明（会编译不过）。
+
+### 2.3（versionCode 14）
+
+- 诊断日志：解析完 Lyrics 后打印 `parsed: 曲名 cues=N translated=M (bundle tl=X)`，
+  能直接看出「拿到了 tlyric 但一行都没贴上去」还是「根本没取到 tlyric」。
+  后者打 `WARN: tlyric 拿到了，但解析后一行翻译都没贴上（findClosestLine 限制 1s）`。
+- 补充一条 ROM 事实：`LyricResponseParser#findClosestLine` 只在最近一行偏差 **≤ 1000ms**
+  时才认这行翻译，所以跨源翻译必须重新对齐时间轴（2.0 已做）。
+
+### 2.2（versionCode 13）
+
+- `prefer_source_translation` / `disable_machine_translation` 合并成三档
+  `machine_translation=auto|source|off`（老的两个布尔键仍然兼容）。
+- 明确一个事实：第二行翻译只有两个来源——源里的 `translatedText` 和
+  `LyricTranslator.apply()` 的机翻。所以 `off` 时如果源里一行翻译都没有，
+  就是**真的没有翻译**（这是预期行为，不是 bug）；想保留人工翻译又不想全空，用 `source`。
+- 跳机翻时会打日志：`use source translation, skip machine translation: N/M`
+  或 `no source translation, fallback to machine translation`，一眼看出源翻译有没有命中。
+- `TranslationSource` 对齐兜底：一行都对不上时不再丢弃，改为原样交给 ROM。
 
 ### 2.1（versionCode 12）
 

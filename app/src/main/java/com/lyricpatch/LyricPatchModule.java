@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import io.github.libxposed.api.XposedModule;
@@ -173,11 +174,13 @@ public final class LyricPatchModule extends XposedModule {
      * 且目标语言是中文时，才回退用 Cue.translatedText（也就是我们给的网易云/QQ 翻译）。
      * 所以配了 translation_providers 却看不到效果，就是因为机翻把它盖住了。
      *
-     * 两个开关（lyricpatch.conf，改完下次取词就生效）：
-     *   prefer_source_translation=true     源里已有翻译就不机翻（保住人工翻译）
-     *   disable_machine_translation=true   完全禁掉机翻（省流量，源没翻译的歌就只剩原文一行）
+     * 一份配置（lyricpatch.conf，热读，改完下次取词生效）：
+     *   machine_translation=auto     ROM 原行为：机翻优先
+     *   machine_translation=source   源里有翻译就用源里的，一行都没有才机翻兜底
+     *   machine_translation=off      永不机翻（源没翻译的歌第二行就是空白）
+     * 老键 prefer_source_translation / disable_machine_translation 仍兼容，等价 source / off。
      *
-     * 两者都只影响「第二行显示什么」，取词逻辑不变；默认都是 false，完全不碰 ROM 原本行为。
+     * 只影响「第二行显示什么」，取词逻辑不变；默认 auto，完全不碰 ROM 原本行为。
      */
     private void hookTranslator(ClassLoader cl) {
         try {
@@ -203,10 +206,26 @@ public final class LyricPatchModule extends XposedModule {
                 Object lyrics = args != null && args.size() > 2 ? args.get(2) : null;
                 if (lyrics == null) return chain.proceed();
 
-                if (Util.confBool("disable_machine_translation", false)) return lyrics;
-                if (Util.confBool("prefer_source_translation", false) && hasTranslation(lyrics)) {
+                String mode = machineMode();
+                if (MODE_AUTO.equals(mode)) return chain.proceed();
+
+                int n = countTranslations(lyrics);
+                int total = cueCount(lyrics);
+
+                if (MODE_OFF.equals(mode)) {
+                    // 彻底不机翻：源里没翻译就是没翻译
+                    log(Log.INFO, TAG, "machine translation off, sourceTranslations="
+                            + n + "/" + total, null);
                     return lyrics;
                 }
+
+                // MODE_SOURCE：有源翻译就不让机翻盖掉，没有才让 ROM 机翻兜底
+                if (n > 0) {
+                    log(Log.INFO, TAG, "use source translation, skip machine translation: "
+                            + n + "/" + total, null);
+                    return lyrics;
+                }
+                log(Log.INFO, TAG, "no source translation, fallback to machine translation", null);
                 return chain.proceed();
             });
 
@@ -216,19 +235,41 @@ public final class LyricPatchModule extends XposedModule {
         }
     }
 
-    /** 源里是否已经有任何一行的翻译（Cue#translatedText） */
-    private static boolean hasTranslation(Object lyrics) {
+    /** 机翻策略：auto（ROM 原行为）/ source（源翻译优先，没有才机翻）/ off（永不机翻） */
+    private static final String MODE_AUTO = "auto";
+    private static final String MODE_SOURCE = "source";
+    private static final String MODE_OFF = "off";
+
+    private static String machineMode() {
+        // 兼容 2.1 那两个布尔开关
+        if (Util.confBool("prefer_source_translation", false)) return MODE_SOURCE;
+        if (Util.confBool("disable_machine_translation", false)) return MODE_OFF;
+
+        String mode = Util.conf("machine_translation", MODE_AUTO).toLowerCase(Locale.ROOT);
+        if (MODE_SOURCE.equals(mode)) return MODE_SOURCE;
+        if (MODE_OFF.equals(mode)) return MODE_OFF;
+        return MODE_AUTO;
+    }
+
+    /** 源里已经带了几行翻译（Cue#translatedText 非空的行数） */
+    private static int countTranslations(Object lyrics) {
         Object cues = readField(lyrics, "mCues");
-        if (!(cues instanceof Map)) return false;
+        if (!(cues instanceof Map)) return 0;
+        int n = 0;
         try {
             for (Object cue : ((Map<?, ?>) cues).values()) {
                 Object t = readField(cue, "translatedText");
-                if (t instanceof CharSequence && t.toString().trim().length() > 0) return true;
+                if (t instanceof CharSequence && t.toString().trim().length() > 0) n++;
             }
         } catch (Throwable ignored) {
             // 读不到就当没有
         }
-        return false;
+        return n;
+    }
+
+    private static int cueCount(Object lyrics) {
+        Object cues = readField(lyrics, "mCues");
+        return cues instanceof Map ? ((Map<?, ?>) cues).size() : 0;
     }
 
     /** 把一个类所有无参方法名拼起来，方便定位框架真实方法名 */

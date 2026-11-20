@@ -154,11 +154,17 @@ public final class TranslationSource {
             used[best] = true;
             out.append(fmt(t)).append(tlTexts.get(best)).append('\n');
         }
-        return out.length() == 0 ? null : out.toString();
+
+        if (out.length() == 0) {
+            // 一行都没对上：宁可原样交回去让 ROM 自己找最近行，也不要直接丢
+            Util.log("tlyric align failed, use raw (" + tlTexts.size() + " lines)");
+            return tlyric;
+        }
+        return out.toString();
     }
 
     /** 解出「时间 + 文本」并行列表；支持一行多个标签 [00:01.00][00:05.00]词 */
-    private static void parse(String text, List<Long> times, List<String> lines) {
+    static void parse(String text, List<Long> times, List<String> lines) {
         if (Util.isEmpty(text)) return;
         for (String raw : text.split("\\r?\\n")) {
             String line = raw.trim();
