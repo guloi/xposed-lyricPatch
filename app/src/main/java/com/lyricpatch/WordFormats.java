@@ -49,7 +49,13 @@ public final class WordFormats {
     }
 
     private static boolean isLyricify(String raw) {
-        return Pattern.compile("\\S\\(\\d+,\\d+\\)").matcher(raw).find();
+        // 至少两处 `词(起,长)` 才认，避免普通歌词里的括号数字误判
+        Matcher m = Pattern.compile("\\S\\(\\d+,\\d+\\)").matcher(raw);
+        int n = 0;
+        while (m.find()) {
+            if (++n >= 2) return true;
+        }
+        return false;
     }
 
     // ---------------------------------------------------------- Enhanced LRC

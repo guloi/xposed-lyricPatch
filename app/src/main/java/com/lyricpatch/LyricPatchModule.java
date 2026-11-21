@@ -30,7 +30,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "3.7";
+    private static final String VERSION = "3.9";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -438,11 +438,16 @@ public final class LyricPatchModule extends XposedModule {
                     return lyrics;
                 }
 
-                // MODE_SOURCE：有源翻译就不让机翻盖掉，没有才让 ROM 机翻兜底
+                // MODE_SOURCE：源翻译够多才用它；只有零星几行就让 ROM 机翻兜底
                 if (n > 0) {
-                    log(Log.INFO, TAG, "use source translation, skip machine translation: "
-                            + n + "/" + total, null);
-                    return lyrics;
+                    int need = Math.max(1, (total + 2) / 3);   // 至少盖住 1/3 才值得跳机翻
+                    if (n >= need) {
+                        log(Log.INFO, TAG, "use source translation, skip machine translation: "
+                                + n + "/" + total, null);
+                        return lyrics;
+                    }
+                    log(Log.INFO, TAG, "source translation too sparse (" + n + "/" + total
+                            + "), fallback to machine translation", null);
                 }
                 log(Log.INFO, TAG, "no source translation, fallback to machine translation", null);
                 return chain.proceed();

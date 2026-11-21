@@ -178,6 +178,11 @@ public final class Kugou {
         byte[] data = Base64.decode(base64, Base64.DEFAULT);
         if (data == null || data.length < 8) return null;
 
+        // 有的接口直接回明文歌词（不是 KRC）：别硬解密，原样交给下游
+        if (!(data[0] == 'k' && data[1] == 'r' && data[2] == 'c' && data[3] == '1')) {
+            return new String(data, "UTF-8");
+        }
+
         for (int i = 1; i < data.length; i++) {
             data[i] = (byte) (data[i] ^ KEY[(i - 1) % KEY.length]);
         }

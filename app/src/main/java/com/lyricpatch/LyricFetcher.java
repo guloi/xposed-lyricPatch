@@ -3,6 +3,7 @@ package com.lyricpatch;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /** 源调度 + 缓存 */
 public final class LyricFetcher {
@@ -96,8 +97,9 @@ public final class LyricFetcher {
 
         if (bundle != null && bundle.empty()) bundle = null;
 
+        // yrc 字段非空 ≠ 真逐字：有些源把纯行级歌词塞进 yrc，所以看有没有 (起,长,0) 词标签
         // 增强 LRC / Lyricify Syllable 自带词级时间，识别到就直接转成 yrc（真逐字）
-        if (bundle != null && Util.isEmpty(bundle.yrc)
+        if (bundle != null && !hasWordTags(bundle.yrc)
                 && Util.confBool("parse_word_formats", true)) {
             String rawForm = !Util.isEmpty(bundle.lrc) ? bundle.lrc : bundle.yrc;
             WordFormats.Result fmt = WordFormats.convert(rawForm);
@@ -140,8 +142,16 @@ public final class LyricFetcher {
             }
         }
 
-        // 还是没有逐字？去酷狗要真逐字（KRC，参考音理的做法：只吃真数据，不算）
-        if (bundle != null && Util.isEmpty(bundle.yrc) && !Util.isEmpty(bundle.lrc)
+        boolean hasYrc = bundle != null && hasWordTags(bundle.yrc);
+
+        // 诊断：已经有真逐字就直接说一声
+        if (hasYrc) {
+            Util.log("already has word timing: " + bundle.yrc.length() + " chars, cues≈"
+                    + lines(bundle.yrc));
+        }
+
+        // 还是没有真逐字？去酷狗要（KRC，参考音理的做法：只吃真数据，不算）
+        if (bundle != null && !hasYrc && !Util.isEmpty(bundle.lrc)
                 && Util.confBool("kugou_word_timing", true)) {
             try {
                 LyricFetcher.Bundle kg = Kugou.fetch(title, artist, durationMs);
@@ -164,7 +174,7 @@ public final class LyricFetcher {
         }
 
         // 还是没有逐字？用行时间轴合成一份，让状态栏也有卡拉OK动画
-        if (bundle != null && Util.isEmpty(bundle.yrc) && !Util.isEmpty(bundle.lrc)
+        if (bundle != null && !hasWordTags(bundle.yrc) && !Util.isEmpty(bundle.lrc)
                 && Util.confBool("synth_word_timing", false)) {
             String yrc = WordTiming.synth(bundle.lrc);
             if (yrc != null) {
@@ -176,6 +186,12 @@ public final class LyricFetcher {
         CACHE.put(key, new Entry(bundle, now + (bundle == null ? MISS_TTL : OK_TTL)));
         if (CACHE.size() > 128) CACHE.clear();
         return bundle;
+    }
+
+    /** yrc 里到底有没有真正的词标签 (起,长,0) */
+    private static boolean hasWordTags(String yrc) {
+        if (Util.isEmpty(yrc)) return false;
+        return Pattern.compile("\\(\\d+,\\s*\\d+,\\s*-?\\d+\\)").matcher(yrc).find();
     }
 
     private static int lines(String s) {
