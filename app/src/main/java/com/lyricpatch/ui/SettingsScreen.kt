@@ -560,9 +560,9 @@ fun SettingsScreen() {
 
     if (UiPrefs.floatingSaveBar) {
         SlideUpSaveBar(
-            shown = saveBarShown.value,
-            // 内容滚不动（不足一屏）时才留那条细线当入口
-            showHandle = !listState.canScrollForward && !listState.canScrollBackward,
+            // 能滚动时跟随滚动显隐；内容不足一屏、根本滚不动时直接常驻
+            shown = saveBarShown.value ||
+                (!listState.canScrollForward && !listState.canScrollBackward),
             onShownChange = { saveBarShown.value = it },
             busy = state.busy,
             dirty = state.dirty,
@@ -936,7 +936,6 @@ private fun SaveBar(
 @Composable
 private fun SlideUpSaveBar(
     shown: Boolean,
-    showHandle: Boolean,
     onShownChange: (Boolean) -> Unit,
     busy: Boolean,
     dirty: Boolean,
@@ -958,27 +957,6 @@ private fun SlideUpSaveBar(
     )
 
     Box(Modifier.fillMaxSize()) {
-        if (!shown && showHandle) {
-            Box(
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(72.dp)
-                    // 拖动手势交给列表（上滑列表就会把保存条带出来），
-                    // 这里只留一个点击兵底：内容不足一屏、滚不动时用
-                    .clickable { onShownChange(true) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    Modifier.navigationBarsPadding()
-                        .padding(bottom = 10.dp)
-                        .width(48.dp)
-                        .height(5.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)),
-                )
-            }
-        }
-
         Box(
             modifier = Modifier.align(Alignment.BottomCenter)
                 .fillMaxWidth()
