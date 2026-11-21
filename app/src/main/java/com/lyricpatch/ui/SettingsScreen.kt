@@ -238,9 +238,9 @@ fun SettingsScreen() {
                     onToggle = if (collapsible) ({ toggle("数据源") }) else null,
                 )
             }
-            if (open("数据源")) {
             item {
-                SettingsCard {
+                SectionBody(open("数据源")) {
+                    SettingsCard {
                     FieldRow(
                         label = "providers",
                         value = state.raw("providers"),
@@ -256,11 +256,8 @@ fun SettingsScreen() {
                         onCheckedChange = { state.putFlag("hide_instrumental", it) },
                     )
                 }
-            }
-            item {
-                CardNote("「状态栏歌词源」优先，未命中时按上方顺序。")
-            }
-
+                    CardNote("「状态栏歌词源」优先，未命中时按上方顺序。")
+                }
             }
 
             item {
@@ -271,9 +268,9 @@ fun SettingsScreen() {
                     onToggle = if (collapsible) ({ toggle("翻译") }) else null,
                 )
             }
-            if (open("翻译")) {
             item {
-                SettingsCard {
+                SectionBody(open("翻译")) {
+                    SettingsCard {
                     SwitchRow(
                         title = "translation",
                         subtitle = "关闭后不请求翻译",
@@ -317,8 +314,7 @@ fun SettingsScreen() {
                         onCheckedChange = { state.putFlag("hide_translation_always", it) },
                     )
                 }
-            }
-
+                }
             }
 
             item {
@@ -329,9 +325,9 @@ fun SettingsScreen() {
                     onToggle = if (collapsible) ({ toggle("逐字") }) else null,
                 )
             }
-            if (open("逐字")) {
             item {
-                SettingsCard {
+                SectionBody(open("逐字")) {
+                    SettingsCard {
                     SwitchRow(
                         title = "parse_word_formats",
                         subtitle = "解析增强 LRC 与 Lyricify Syllable 格式",
@@ -384,8 +380,7 @@ fun SettingsScreen() {
                         onChange = { state.put("word_timing_max_chars", it.toString()) },
                     )
                 }
-            }
-
+                }
             }
 
             item {
@@ -396,9 +391,9 @@ fun SettingsScreen() {
                     onToggle = if (collapsible) ({ toggle("长句滚动") }) else null,
                 )
             }
-            if (open("长句滚动")) {
             item {
-                SettingsCard {
+                SectionBody(open("长句滚动")) {
+                    SettingsCard {
                     SwitchRow(
                         title = "word_scroll",
                         subtitle = "为逐字模式补充横向滚动",
@@ -434,11 +429,8 @@ fun SettingsScreen() {
                         onChange = { state.put("word_scroll_delay", (it * 100).toString()) },
                     )
                 }
-            }
-            item {
-                CardNote("ROM 的逐字绘制不会滚动，超宽部分会被裁切。开启跟随后先静止，接近右边缘再滚动；关闭则从行首滚动。")
-            }
-
+                    CardNote("ROM 的逐字绘制不会滚动，超宽部分会被裁切。开启跟随后先静止，接近右边缘再滚动；关闭则从行首滚动。")
+                }
             }
 
             item {
@@ -449,9 +441,9 @@ fun SettingsScreen() {
                     onToggle = if (collapsible) ({ toggle("应用过滤") }) else null,
                 )
             }
-            if (open("应用过滤")) {
             item {
-                SettingsCard {
+                SectionBody(open("应用过滤")) {
+                    SettingsCard {
                     val white = state.raw("app_whitelist")
                     val black = state.raw("app_blacklist")
                     // 白名单非空时黑名单失效，反之亦然：失效且自身为空的那个置灰；
@@ -472,8 +464,7 @@ fun SettingsScreen() {
                         onChange = { state.put("app_blacklist", it) },
                     )
                 }
-            }
-
+                }
             }
 
             item {
@@ -484,9 +475,9 @@ fun SettingsScreen() {
                     onToggle = if (collapsible) ({ toggle("调试") }) else null,
                 )
             }
-            if (open("调试")) {
             item {
-                SettingsCard {
+                SectionBody(open("调试")) {
+                    SettingsCard {
                     // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
                     val currentLevel = state.raw("log_level").ifBlank {
                         if (state.flag("debug_log")) "debug" else "info"
@@ -504,8 +495,7 @@ fun SettingsScreen() {
                         value = state.path.orEmpty(),
                     )
                 }
-            }
-
+                }
             }
 
             item {

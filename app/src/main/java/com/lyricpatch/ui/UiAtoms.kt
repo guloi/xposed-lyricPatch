@@ -1,5 +1,10 @@
 package com.lyricpatch.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -83,6 +88,20 @@ fun SectionHeader(
                 )
             }
         }
+    }
+}
+
+/** 分组内容：展开 / 收起都走弹簧，收起后不占高度 */
+@Composable
+fun SectionBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    AnimatedVisibility(
+        visible = expanded,
+        enter = expandVertically(animationSpec = bouncy()) +
+            fadeIn(animationSpec = bouncy()),
+        exit = shrinkVertically(animationSpec = bouncy()) +
+            fadeOut(animationSpec = bouncy()),
+    ) {
+        Column(content = content)
     }
 }
 

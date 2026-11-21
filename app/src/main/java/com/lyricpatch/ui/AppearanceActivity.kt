@@ -69,9 +69,17 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     checked = UiPrefs.dynamicColor,
                     onCheckedChange = { UiPrefs.updateDynamicColor(it) },
                 )
-                if (!UiPrefs.dynamicColor) {
-                    RowDivider()
-                    AccentPicker()
+                AnimatedVisibility(
+                    visible = !UiPrefs.dynamicColor,
+                    enter = expandVertically(animationSpec = bouncy()) +
+                        fadeIn(animationSpec = bouncy()),
+                    exit = shrinkVertically(animationSpec = bouncy()) +
+                        fadeOut(animationSpec = bouncy()),
+                ) {
+                    Column {
+                        RowDivider()
+                        AccentPicker()
+                    }
                 }
             }
             CardNote("关闭后使用下方选定的颜色作为主题色。")
