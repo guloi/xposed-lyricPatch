@@ -17,6 +17,12 @@
             android:value="@string/app_desc" />
         <meta-data android:name="xposedminversion" android:value="102" />
 
+        <!-- 配置出入口：内部存储的文件只读地给 SystemUI 取（不设权限，设了它拿不到） -->
+        <provider
+            android:name=".ui.ConfigProvider"
+            android:authorities="com.lyricpatch.config"
+            android:exported="true" />
+
         <!-- 模块自己的设置界面（Compose + Material3） -->
         <activity
             android:name=".ui.SettingsActivity"

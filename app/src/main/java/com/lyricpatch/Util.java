@@ -1,11 +1,13 @@
 package com.lyricpatch;
 
+import android.content.Context;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -14,6 +16,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** 网络 / 字符串归一化 / 配置 工具类 */
 public final class Util {
@@ -24,15 +29,32 @@ public final class Util {
             "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) "
                     + "Chrome/126.0.0.0 Mobile Safari/537.36";
 
-    /** 可选配置，按顺序取第一个能读到的（都不存在就用默认值） */
-    private static final String[] CONF_PATHS = {
-            "/data/system/lyricpatch.conf",
-            "/data/local/tmp/lyricpatch.conf"
-    };
+    /**
+     * 配置不再放 /data/system 那种要 root 的地方：
+     * 文件在模块 App 自己的内部存储里，这里通过它暴露的 ContentProvider 只读地拿。
+     * 不设权限（设了 SystemUI 也拿不到），内容就是歌词源 / 开关，不含隐私。
+     */
+    private static final String CONF_AUTHORITY = "com.lyricpatch.config";
+    private static final Uri CONF_URI = Uri.parse("content://" + CONF_AUTHORITY + "/conf");
 
-    private static Properties sConf;
-    private static long sConfMtime = Long.MIN_VALUE;
-    private static boolean sConfLogged;
+    /** 配置变了靠广播通知；这个 TTL 只是兜底（万一广播没收到） */
+    private static final long CONF_TTL = 300000L;
+    private static final String ACTION_CONF_CHANGED = "com.lyricpatch.CONFIG_CHANGED";
+    private static volatile boolean sWatching;
+    private static final Object CONF_LOCK = new Object();
+    private static final Properties EMPTY_CONF = new Properties();
+    private static final AtomicBoolean sFetching = new AtomicBoolean();
+    private static final ExecutorService CONF_EXEC = Executors.newSingleThreadExecutor(runnable -> {
+        Thread t = new Thread(runnable, "LyricPatch-conf");
+        t.setDaemon(true);
+        return t;
+    });
+
+    private static volatile Properties sConf;
+    /** 0 = 没拿到过 / 已被作废 */
+    private static volatile long sConfAt;
+    private static volatile boolean sConfLogged;
+    private static volatile Context sContext;
 
     private Util() {
     }
@@ -53,8 +75,8 @@ public final class Util {
     private static final Map<String, Long> RATE_LIMIT = new ConcurrentHashMap<>();
 
     /**
-     * 当前级别。配置是热读的，但每帧都去 stat 一遍文件太亏，所以 3 秒才看一眼。
-     * log_level 不写时退回老开关：debug_log=true 等价于 debug。
+     * 当前级别。conf() 本身有快照缓存（保存时靠广播刷新），这里再按 3 秒节流一次，
+     * 省得每帧绘制都重新解析一遍。log_level 不写时退回老开关：debug_log=true 等价于 debug。
      */
     static int logLevel() {
         long now = SystemClock.uptimeMillis();
@@ -231,38 +253,137 @@ public final class Util {
         }
     }
 
-    private static synchronized Properties conf() {
-        try {
-            File found = null;
-            for (String path : CONF_PATHS) {
-                File f = new File(path);
-                if (f.canRead()) {
-                    found = f;
-                    break;
-                }
-            }
-            long mtime = found == null ? -1L : found.lastModified();
-            if (sConf != null && mtime == sConfMtime) return sConf;
+    /** 让 hook 顺手把 SystemUI 的 Context 递进来（反射拿不到时的兵底） */
+    static void setContext(Context ctx) {
+        if (ctx != null && sContext == null) sContext = ctx;
+    }
 
-            Properties p = new Properties();
-            if (found != null) {
-                try (FileInputStream in = new FileInputStream(found)) {
-                    p.load(in);
-                }
+    private static Context appContext() {
+        Context ctx = sContext;
+        if (ctx != null) return ctx;
+        try {
+            Class<?> activityThread = Class.forName("android.app.ActivityThread");
+            Object app = activityThread.getDeclaredMethod("currentApplication").invoke(null);
+            if (app instanceof Context) {
+                sContext = (Context) app;
+                return (Context) app;
             }
-            sConf = p;
-            sConfMtime = mtime;
-            if (!sConfLogged) {
-                sConfLogged = true;
-                log("conf: " + (found == null ? "not found (" + CONF_PATHS[0] + ")"
-                        : "loaded " + found.getAbsolutePath())
-                        + " keys=" + p.size());
+        } catch (Throwable ignored) {
+            // 进程还没起来，下次再试
+        }
+        return null;
+    }
+
+    /** 收一次广播就把快照作废，下一次读取重新拉：避免为了拿配置一直轮询 */
+    private static void ensureWatcher() {
+        if (sWatching) return;
+        Context ctx = appContext();
+        if (ctx == null) return;
+        sWatching = true;
+        try {
+            android.content.IntentFilter filter = new android.content.IntentFilter(ACTION_CONF_CHANGED);
+            android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
+                @Override
+                public void onReceive(Context c, android.content.Intent intent) {
+                    sConfAt = 0L;          // 0 = 作废，下次读重新拉
+                    scheduleFetch();
+                }
+            };
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                ctx.registerReceiver(receiver, filter);
             }
         } catch (Throwable t) {
-            logw("read conf failed", t);
-            if (sConf == null) sConf = new Properties();
+            sWatching = false;         // 下次再试
+            logw("register conf watcher failed", t);
         }
-        return sConf;
+    }
+
+    /**
+     * 当前配置快照。
+     *  - 后台线程（取词那一条）且还没快照：直接同步取一次，不卡 UI
+     *  - 主线程（onDraw 里问 word_scroll）：绝不阻塞，先用旧快照 + 排一个后台刷新
+     */
+    private static Properties conf() {
+        ensureWatcher();
+        Properties snapshot = sConf;
+        long now = SystemClock.uptimeMillis();
+        if (snapshot != null && sConfAt != 0L && now - sConfAt < CONF_TTL) return snapshot;
+
+        if (snapshot == null && Looper.myLooper() != Looper.getMainLooper()) {
+            Properties loaded = fetchConf(snapshot);
+            return loaded != null ? loaded : EMPTY_CONF;
+        }
+
+        scheduleFetch();
+        return snapshot != null ? snapshot : EMPTY_CONF;
+    }
+
+    private static void scheduleFetch() {
+        if (!sFetching.compareAndSet(false, true)) return;
+        try {
+            CONF_EXEC.execute(() -> {
+                try {
+                    fetchConf(null);
+                } catch (Throwable ignored) {
+                    // 取配置失败就当默认值，不影响出词
+                } finally {
+                    sFetching.set(false);
+                }
+            });
+        } catch (Throwable t) {
+            sFetching.set(false);
+        }
+    }
+
+    private static Properties fetchConf(Properties fallback) {
+        synchronized (CONF_LOCK) {
+            long now = SystemClock.uptimeMillis();
+            Properties current = sConf;
+            if (current != null && sConfAt != 0L && now - sConfAt < CONF_TTL) return current;
+
+            Properties loaded = readConf();
+            if (loaded != null) {
+                sConf = loaded;
+                sConfAt = now;
+                if (!sConfLogged) {
+                    sConfLogged = true;
+                    log("conf: " + loaded.size() + " keys（来自模块 App 内部存储）");
+                }
+                return loaded;
+            }
+            return fallback != null ? fallback : current;
+        }
+    }
+
+    /** 向模块 App 的 ConfigProvider 要一份原始文本（空文本 = 还没写过，按默认值） */
+    private static Properties readConf() {
+        Context ctx = appContext();
+        if (ctx == null) return null;
+        try {
+            Bundle reply = ctx.getContentResolver().call(CONF_URI, "read", null, null);
+            if (reply == null) return EMPTY_CONF;
+            String text = reply.getString("text");
+            if (text == null || text.trim().isEmpty()) return EMPTY_CONF;
+            return parseConf(text);
+        } catch (Throwable t) {
+            logw("read conf from provider failed", t);
+            return null;
+        }
+    }
+
+    /** 自己解 key=value：不用 Properties.load，省得值里的反斜杠/冒号被当转义 */
+    private static Properties parseConf(String text) {
+        Properties p = new Properties();
+        for (String raw : text.split("\\r?\n")) {
+            String line = raw.trim();
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("!")) continue;
+            int eq = line.indexOf('=');
+            if (eq <= 0) continue;
+            p.setProperty(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+        }
+        return p;
     }
 
     static String conf(String key, String def) {

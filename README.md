@@ -61,11 +61,13 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 桌面上多了「歌词补丁」入口，点开就是全部配置（Compose + Material 3 Expressive 风格：
 超大圆角容器 / 动态取色 / 胶囊分段 / 滑杆，深浅色自动跟随，底部常驻保存条）。
 
-- **保存并生效**：把整份配置写到 `/data/system/lyricpatch.conf`（优先写已经在用的那个；
-  两个都没有就同时写 `/data/local/tmp/lyricpatch.conf` 兜底），写完会 `cat` 回读校验；
-- 普通 App 进不去这两个目录，所以读写全走 `su`；没 root 时顶部会直接标「无 root」，不假装成功；
-- 头部两个胶囊：**重新读取** / **重启 SystemUI**（`kill $(pidof com.android.systemui)`）；
-- 模块按 mtime 热读配置，保存后**不用重启**，下一次取词就生效（只有第一次启用模块才需要）；
+- **保存并生效**：写进 App 自己的内部存储（见上面「可选配置」），先写 `.tmp` 再 rename，
+  SystemUI 不会读到写了一半的文件；
+- **不需要 root**：没有 `su`、没有 root 检测，也没有“重启 SystemUI”这种按钮；
+- 头部胶囊：**重新读取**（从文件重拉一份）；
+- 保存后发一条 `com.lyricpatch.CONFIG_CHANGED` 广播，SystemUI 侧的 hook 收到就把快照作废、
+  重新拉一次（还有 5 分钟一次的兜底轮询）；读取永远在后台线程，不卡取词和绘制，
+  所以**不用重启**，下一次取词就生效；
 - 「状态栏预览」那张卡片会跑一遍逐字高亮，并标出当前的滚动参数；
 - 文件里手写的未知键不会被删，只按面板上的键覆盖/重写。
 
@@ -86,7 +88,15 @@ adb shell cmd statusbar lyric clear
 
 ## 可选配置
 
-`/data/local/tmp/lyricpatch.conf`（系统 UI 要能读，`chmod 644`），缺失就用默认值：
+配置存在模块 App 自己的内部存储里，不需要 root、不用 `chmod`：
+
+```
+/data/user/0/com.lyricpatch/files/lyricpatch.conf
+```
+
+SystemUI 是另一个进程，直接读这个文件会被权限和 SELinux 拦住，所以由模块暴露一个只读的
+`com.lyricpatch.config` provider 给它取（内容就是这些开关，不含隐私）。界面上改最省事；
+文件在 App 私有目录，手改需要 root / root 文件管理器（改完下次取词生效）。缺失就用默认值：
 
 ```properties
 # 主歌词源顺序，逗号分隔：netease / qq / kugou / lrclib / https://your.server
@@ -135,10 +145,11 @@ kugou_word_timing=true
 
 # 逐字模式下长句的跑马灯（4.13+，默认开）。
 # ROM 的逐字自绘把文本钉死在左边、完全不看 mOffset，句子比控件宽时右边会被裁掉；
-# 模块在 onDraw 外面套一层 canvas.translate 平移整行，节奏复刻 ROM 原生跑马灯
+# 模块在 onDraw 外面套一层 canvas.translate 平移整行
 # word_scroll=true
-# 每 10ms 的像素数（不写 = 取 ROM 的 mScrollSpeed，默认 4）
-# word_scroll_speed=4
+# 滚动速度：不写（或 0）= 自动，按这一行的词级时长把整段滚动铺满，句尾刚好露出来；
+# 填数字 = 固定 px/10ms（4 就是 ROM 跑马灯那档，长句反而会跑得太快）
+# word_scroll_speed=0
 # 开滚前的停顿（ms，不写 = 500，和 ROM 一致）
 # word_scroll_delay=500
 
@@ -197,8 +208,8 @@ translation_providers=https://my.server
   `mStopped` 置 `true` 并移掉 `mStartScrollRunnable`，所以逐字轮永远滚不起来，
   超宽的行右半边直接被裁。模块只 hook `onDraw`，在其外面 `canvas.translate(dx, 0)`
   平移整行（ROM 内部的 `clipRect` 高亮会自动跟着裁好，观感和原生跑马灯一致），
-  dx 按 ROM 自己那套参数算（等 500ms，然后每 10ms 走 `mScrollSpeed`），
-  并自己 `postInvalidateDelayed(10)` 维持帧率。
+  dx 默认按「这一行的词级时长」自动铺满（等 500ms 起滚，句尾刚好露出来，
+  不会一上来就冲到底），并自己 `postInvalidateDelayed(10)` 维持帧率。
 - 网易云客户端（`*netease*`）且 `mediaId` 为纯数字时，直接按歌曲 id 取词，不搜索。
 - 结果缓存：命中 6 小时，未命中 10 分钟。
 

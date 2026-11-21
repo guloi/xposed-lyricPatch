@@ -39,7 +39,6 @@ import kotlin.math.roundToInt
  */
 private class UiState {
     val values = mutableStateMapOf<String, String>()
-    var root by mutableStateOf(false)
     var path by mutableStateOf<String?>(null)
     var loaded by mutableStateOf(false)
     var busy by mutableStateOf(false)
@@ -82,9 +81,8 @@ fun SettingsScreen() {
     }
 
     LaunchedEffect(Unit) {
-        val result = withContext(Dispatchers.IO) { ConfigStore.load() }
+        val result = withContext(Dispatchers.IO) { ConfigStore.load(context) }
         state.values.putAll(result.values)
-        state.root = result.root
         state.path = result.path
         state.loaded = true
     }
@@ -92,14 +90,13 @@ fun SettingsScreen() {
     val onReload: () -> Unit = {
         scope.launch {
             state.busy = true
-            val result = withContext(Dispatchers.IO) { ConfigStore.load() }
+            val result = withContext(Dispatchers.IO) { ConfigStore.load(context) }
             state.values.clear()
             state.values.putAll(result.values)
-            state.root = result.root
             state.path = result.path
             state.dirty = false
             state.busy = false
-            snackbar.showSnackbar(if (result.root) "已重新读取" else "没有 root，读不到配置文件")
+            snackbar.showSnackbar("已重新读取")
         }
     }
 
@@ -108,7 +105,7 @@ fun SettingsScreen() {
             scope.launch {
                 state.busy = true
                 val snapshot = state.values.toMap()
-                val result = withContext(Dispatchers.IO) { ConfigStore.save(snapshot, state.path) }
+                val result = withContext(Dispatchers.IO) { ConfigStore.save(context, snapshot) }
                 state.busy = false
                 if (result.ok) {
                     state.dirty = false
@@ -118,13 +115,6 @@ fun SettingsScreen() {
                     snackbar.showSnackbar("保存失败：${result.message}")
                 }
             }
-        }
-    }
-
-    val onRestart: () -> Unit = {
-        scope.launch {
-            val ok = withContext(Dispatchers.IO) { ConfigStore.restartSystemUi() }
-            snackbar.showSnackbar(if (ok) "已重启 SystemUI" else "重启失败（需要 root）")
         }
     }
 
@@ -150,29 +140,17 @@ fun SettingsScreen() {
             item {
                 Hero(
                     version = version,
-                    root = state.root,
                     dirty = state.dirty,
                     onReload = onReload,
-                    onRestart = onRestart,
                 )
             }
             item {
                 PreviewCard(
                     scrollOn = state.flag("word_scroll"),
-                    speed = state.num("word_scroll_speed", 4),
+                    speed = state.num("word_scroll_speed", 0),
                     delayMs = state.num("word_scroll_delay", 500),
                 )
             }
-            if (!state.root) {
-                item {
-                    NoteCard(
-                        "没拿到 root：现在读写的是默认值，保存会失败。" +
-                            "授权 su 后点右上「重读」就行。",
-                        error = true,
-                    )
-                }
-            }
-
             item { SectionHeader("数据源", "按顺序尝试，第一个出词的就用它") }
             item {
                 SettingsCard {
@@ -309,11 +287,11 @@ fun SettingsScreen() {
                     RowDivider()
                     SliderRow(
                         title = "word_scroll_speed",
-                        subtitle = "每 10ms 走多少像素（0 = 用 ROM 自己的值）",
+                        subtitle = "0 = 自动：铺满这一行的演唱时长；填数字 = 固定 px/10ms",
                         value = state.num("word_scroll_speed", 0),
                         range = 0f..16f,
                         steps = 15,
-                        display = state.num("word_scroll_speed", 0).let { if (it <= 0) "跟随 ROM" else "${it}px" },
+                        display = state.num("word_scroll_speed", 0).let { if (it <= 0) "自动" else "${it}px" },
                         onChange = { state.put("word_scroll_speed", it.toString()) },
                     )
                     RowDivider()
@@ -372,7 +350,7 @@ fun SettingsScreen() {
                     RowDivider()
                     InfoRow(
                         title = "配置文件",
-                        value = state.path ?: "${ConfigStore.TMP_PATH}（尚未创建）",
+                        value = state.path.orEmpty(),
                     )
                 }
             }
@@ -412,10 +390,8 @@ private val LOG_LEVELS = listOf(
 @Composable
 private fun Hero(
     version: String,
-    root: Boolean,
     dirty: Boolean,
     onReload: () -> Unit,
-    onRestart: () -> Unit,
 ) {
     val gradient = Brush.linearGradient(
         listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.tertiary),
@@ -441,14 +417,18 @@ private fun Hero(
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("v$version")
-            Pill(if (root) "root 就绪" else "无 root")
             Pill(if (dirty) "未保存" else "已同步")
         }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             HeroAction("重新读取", onReload)
-            HeroAction("重启 SystemUI", onRestart)
         }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "配置存在模块内部存储，SystemUI 通过 provider 读，不需要 root",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+        )
     }
 }
 
@@ -533,8 +513,8 @@ private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
             Spacer(Modifier.height(14.dp))
             Text(
                 if (scrollOn) {
-                    val speedText = if (speed <= 0) "ROM 自带的 4px" else "${speed}px"
-                    "长句会先停 ${delayMs}ms，然后每 10ms 平移 $speedText · 关掉就会回到“右半边被裁”"
+                    val speedText = if (speed <= 0) "按这一行的时长自动铺满" else "每 10ms ${speed}px"
+                    "长句先停 ${delayMs}ms，然后$speedText，句尾刚好露出来"
                 } else {
                     "word_scroll 关掉了：这句话在状态栏上只能看到前半段"
                 },
@@ -578,24 +558,6 @@ private fun CardNote(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-}
-
-@Composable
-private fun NoteCard(text: String, error: Boolean) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-        shape = MaterialTheme.shapes.large,
-        color = if (error) MaterialTheme.colorScheme.errorContainer
-        else MaterialTheme.colorScheme.secondaryContainer,
-    ) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (error) MaterialTheme.colorScheme.onErrorContainer
-            else MaterialTheme.colorScheme.onSecondaryContainer,
-        )
-    }
 }
 
 @Composable

@@ -46,7 +46,13 @@ final class LyricScroll {
     private static Field sTextWidth;
     private static Field sRtl;
     private static Field sScrollSpeed;
+    private static Field sWordPos;
     private static boolean sResolved;
+
+    /** Word 的时间字段，第一次用到才解 */
+    private static Field sWordBegin;
+    private static Field sWordEnd;
+    private static boolean sWordResolved;
 
     private static long sConfAt;
     private static boolean sConfOn = true;
@@ -126,7 +132,13 @@ final class LyricScroll {
                 st = new State();
                 st.words = words;
                 st.text = text;
-                st.startAt = now;
+                // 从半路 seek 进来时别再从头滚一遍：把已经唱过的那段先补进 startAt
+                long already = 0L;
+                Object posObj = read(sWordPos, view);
+                long pos = posObj instanceof Long ? (Long) posObj : 0L;
+                long first = firstBeginMs(words);
+                if (pos > 0 && first > 0) already = Math.max(0L, pos - first);
+                st.startAt = now - already;
                 STATES.put(view, st);
                 if (Util.isDebug() && Util.allow("scroll-line:" + text, 1000L)) {
                     Util.d("word scroll: 新行 text=" + (int) textWidth + "px > view="
@@ -136,13 +148,18 @@ final class LyricScroll {
             }
         }
 
-        // 还没到起播时间（ROM 是 500ms）：这一帧不动，只在那一下把自己叫醒，
+        float maxScroll = textWidth - width;
+        // 滚多快由「这一行自己要唱多久」决定：整段滚动刚好在句尾铺满，
+        // 而不是一上来就按 4px/10ms 冲到底（那样句首秒就没）
+        long span = spanMs(words);
+        float speed = speedOf(view, maxScroll, span);
+
+        // 还没到起播时间（默认 500ms）：这一帧不动，只在那一下把自己叫醒，
         // 省的为了一个静止画面跑 100fps
         long remaining = st.startAt + sConfDelay - now;
         if (remaining > 0) return new Scroll(0f, false, remaining);
 
-        float maxScroll = textWidth - width;
-        float progress = (-remaining / (float) FRAME_MS) * speedOf(view);
+        float progress = (-remaining / (float) FRAME_MS) * speed;
         boolean done = progress >= maxScroll;
         if (done) progress = maxScroll;
 
@@ -153,7 +170,7 @@ final class LyricScroll {
         return new Scroll(Math.round(rtl ? progress : -progress), done, done ? 0L : FRAME_MS);
     }
 
-    /** 配置热读，但每帧都 stat 一遍配置文件太亏，3 秒一次就够 */
+    /** 配置热读，但每帧都去问一遍配置太亏，3 秒一次就够 */
     private static void refreshConf() {
         long now = SystemClock.uptimeMillis();
         if (sConfAt != 0 && now - sConfAt < 3000L) return;
@@ -172,6 +189,7 @@ final class LyricScroll {
         sTextWidth = find(type, "mTextWidth");
         sRtl = find(type, "mTextRtl");
         sScrollSpeed = find(type, "mScrollSpeed");
+        sWordPos = find(type, "mWordPositionMs");   // 可选的：拿不到就当 0
 
         boolean ok = sText != null && sWords != null && sTextWidth != null && sRtl != null;
         if (!ok) Util.w("LyricTextView 字段缺失，逐字长句滚动不可用");
@@ -214,12 +232,62 @@ final class LyricScroll {
         return 0f;
     }
 
-    /** 滚动手感：优先配置，其次 ROM 的 mScrollSpeed（4px/10ms） */
-    private static float speedOf(View view) {
+    /**
+     * 滚动手感。
+     *  - word_scroll_speed 写了正数：就按那个固定速度（px / 10ms），老行为
+     *  - 默认（0）：自动 —— 把 maxScroll 铺满这一行的演唱时长，句尾刚好露出尾巴
+     */
+    private static float speedOf(View view, float maxScroll, long span) {
         if (sConfSpeed > 0) return sConfSpeed;
-        Object v = read(sScrollSpeed, view);
-        if (v instanceof Integer && (Integer) v > 0) return (Integer) v;
-        return 4f;
+        float perFrame = maxScroll * (float) FRAME_MS / Math.max(1L, span);
+        if (perFrame <= 0f) return 1f;
+        return Math.min(12f, perFrame);   // 再快也不超 12px/10ms，否则一样看不到字
+    }
+
+    /** 这一行大概唱多久（词级时间直接给了），拿不到就当 4 秒 */
+    private static long spanMs(Object words) {
+        long first = -1L;
+        long last = -1L;
+        try {
+            List<?> list = (List<?>) words;
+            for (int i = 0; i < list.size(); i++) {
+                Object word = list.get(i);
+                resolveWord(word);
+                long begin = asLong(read(sWordBegin, word), -1L);
+                long end = asLong(read(sWordEnd, word), -1L);
+                if (begin >= 0 && first < 0) first = begin;
+                if (end > last) last = end;
+            }
+        } catch (Throwable ignored) {
+            // 读不到就按默认时长走
+        }
+        if (first < 0 || last <= first) return 4000L;
+        return Math.max(700L, Math.min(15000L, last - first));
+    }
+
+    private static long firstBeginMs(Object words) {
+        try {
+            List<?> list = (List<?>) words;
+            if (!list.isEmpty()) {
+                Object word = list.get(0);
+                resolveWord(word);
+                return asLong(read(sWordBegin, word), -1L);
+            }
+        } catch (Throwable ignored) {
+            // 拿不到就返回 -1
+        }
+        return -1L;
+    }
+
+    private static void resolveWord(Object word) {
+        if (sWordResolved || word == null) return;
+        sWordResolved = true;
+        sWordBegin = find(word.getClass(), "beginMs");
+        sWordEnd = find(word.getClass(), "endMs");
+    }
+
+    private static long asLong(Object v, long def) {
+        return v instanceof Number ? ((Number) v).longValue() : def;
     }
 
     private static void forget(View view) {

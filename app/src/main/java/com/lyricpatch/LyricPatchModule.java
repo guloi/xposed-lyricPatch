@@ -1,5 +1,6 @@
 package com.lyricpatch;
 
+import android.content.Context;
 import android.graphics.Canvas;
 import android.os.Handler;
 import android.util.Log;
@@ -33,7 +34,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.15";
+    private static final String VERSION = "4.17";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -406,6 +407,10 @@ public final class LyricPatchModule extends XposedModule {
                 Object text = args != null && args.size() > 0 ? args.get(0) : null;
                 Object translated = args != null && args.size() > 1 ? args.get(1) : null;
                 Object self = chain.getThisObject();
+
+                // 顺手把 SystemUI 的 Context 递过去：配置就是靠它走 provider 读的
+                Object ctx = readField(self, "mContext");
+                if (ctx instanceof Context) Util.setContext((Context) ctx);
 
                 boolean noTranslation = translated == null
                         || translated.toString().trim().isEmpty();
