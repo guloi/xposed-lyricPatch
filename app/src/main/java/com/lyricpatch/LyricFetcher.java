@@ -30,6 +30,20 @@ public final class LyricFetcher {
     }
 
     private static final Map<String, Entry> CACHE = new ConcurrentHashMap<>();
+
+    /**
+     * SystemUI 设置里填的“状态栏歌词源”（; 分隔的 http base），由 LyricPatchModule 的
+     * LyricSourceFactory#create hook 传进来。
+     *
+     * 音理 / lyricon 这类 App 会把自己的本地 HTTP 服务写进这个设置，
+     * 而 ROM 自带的 HttpLyricSource 只读 lrc/tlyric，会把 yrc（逐字）丢掉；
+     * 我们自己再请求一遍就能把 yrc 完整拿到。
+     */
+    private static volatile String sUpstream;
+
+    public static void setUpstream(String setting) {
+        sUpstream = setting;
+    }
     private static final long OK_TTL = 6L * 3600 * 1000;
     private static final long MISS_TTL = 10L * 60 * 1000;
 
@@ -46,7 +60,8 @@ public final class LyricFetcher {
                 // 配置变了就别复用旧结果（否则刚打开翻译还是会吃到无翻译的旧缓存）
                 .append('\0').append(withTranslation)
                 .append('\0').append(Util.conf("providers", "netease,lrclib"))
-                .append('\0').append(Util.conf("translation_providers", ""));
+                .append('\0').append(Util.conf("translation_providers", ""))
+                .append('\0').append(nz(sUpstream));
         String key = keyBuilder.toString();
 
         long now = System.currentTimeMillis();
@@ -68,6 +83,11 @@ public final class LyricFetcher {
         if (bundle == null) {
             // 注意：URL 里可能有大小写，只对内置名字做小写化
             String order = Util.conf("providers", "netease,lrclib");
+            if (!Util.isEmpty(sUpstream)) {
+                // 设置里填的 base（通常是音理/lyricon 的本地服务）优先，因为它们可能带 yrc
+                order = sUpstream.replace(';', ',') + "," + order;
+                Util.log("upstream first: " + sUpstream);
+            }
             for (String raw : order.split(",")) {
                 String provider = raw.trim();
                 if (provider.isEmpty()) continue;
@@ -205,6 +225,10 @@ public final class LyricFetcher {
 
     private static String their(int mine, int theirs) {
         return "mine=" + mine + " kugou=" + theirs;
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
     }
 
     private static boolean isNumeric(String s) {

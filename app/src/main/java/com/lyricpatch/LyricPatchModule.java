@@ -30,7 +30,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "3.9";
+    private static final String VERSION = "4.0";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -88,16 +88,19 @@ public final class LyricPatchModule extends XposedModule {
                 }
                 boolean emptySetting = setting == null || setting.trim().isEmpty();
 
+                // 记住用户配置的状态栏歌词源（可能是音理/lyricon 的本地 HTTP 服务）
+                LyricFetcher.setUpstream(emptySetting ? null : setting);
+
                 List<Object> out = new ArrayList<>();
 
-                // 没填自定义源：先试我们的（内置 Apple/LrcLib 垫底）
-                if (emptySetting && source != null) out.add(source);
+                // 我们的源永远排第一：
+                //  - 设置为空：正常补源（内置 Apple/LrcLib 垫底）
+                //  - 设置非空：我们也会按同样协议去问那个 base，但能完整保留 yrc（逐字）；
+                //    ROM 自带 HttpLyricSource 只读 lrc/tlyric，会把逐字丢掉
+                if (source != null) out.add(source);
 
                 Object original = chain.proceed();
                 if (original instanceof List) out.addAll((List<?>) original);
-
-                // 填了自定义 https 源：我们的垫底，自定义源全挂也能出词
-                if (!emptySetting && source != null) out.add(source);
 
                 return out;
             });
