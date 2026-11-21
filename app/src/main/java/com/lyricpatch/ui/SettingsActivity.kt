@@ -10,6 +10,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        UiPrefs.load(this)
         setContent {
             LyricPatchTheme {
                 SettingsScreen()

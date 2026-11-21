@@ -52,13 +52,16 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 |---|---|
 | compileSdk / targetSdk | **37（Android 17）**，跟 ROM 的 SystemUI 对齐 |
 | minSdk | 29 |
-| AGP / Gradle | 8.7.3 / 8.11.1（wrapper 与 CI 同步） |
-| Kotlin | 2.1.0（Compose 编译器插件同版本） |
+| AGP / Gradle | 9.0.0 / 9.3.0（wrapper 与 CI 同步） |
+| Kotlin | 2.2.0，由 AGP 内置提供（不引 kotlin-android 插件） |
+| Compose 编译器插件 | `org.jetbrains.kotlin.plugin.compose` 2.2.0 |
 | Compose BOM | 2024.12.01 |
 
 需要 JDK 17+；`android-37` 平台由 AGP 自动补装（CI 镜像的 licenses 已接受）。
-AGP 8.7.3 的官方上限是 35，编 37 会报“未测试”警告，`gradle.properties` 里用
-`android.suppressUnsupportedCompileSdk=37` 压掉了；等确认 AGP 9 内置 Kotlin 的用法后再整包升级。
+
+AGP 9 自带 Kotlin：再加 `org.jetbrains.kotlin.android` 会因 `kotlin` 扩展重名直接失败；
+但 `buildFeatures.compose` 仍要求显式应用 Compose 编译器插件，版本需与内置 Kotlin 一致。
+`jvmTarget` 取自 `compileOptions`（17）。
 targetSdk 37 会强制 edge-to-edge，设置页已经用 `enableEdgeToEdge()` + Scaffold insets 处理好了。
 
 
@@ -76,8 +79,8 @@ targetSdk 37 会强制 edge-to-edge，设置页已经用 `enableEdgeToEdge()` + 
 桌面上多了「歌词补丁」入口，点开就是全部配置（Compose + Material 3 Expressive 风格：
 超大圆角容器 / 动态取色 / 胶囊分段 / 滑杆，深浅色自动跟随，底部常驻保存条）。
 
-- **保存并生效**：写进 App 自己的内部存储（见上面「可选配置」），先写 `.tmp` 再 rename，
-  SystemUI 不会读到写了一半的文件；
+- **保存**：写进 App 自己的内部存储（见上面「可选配置」），先写 `.tmp` 再 rename，
+  SystemUI 不会读到写了一半的文件；没有未保存改动时按钮置灰；
 - **不需要 root**：没有 `su`、没有 root 检测，也没有“重启 SystemUI”这种按钮；
 - 头部第二、三个胶囊：**已同步/未保存**（配置有没有存过盘）、**已启用/未启用**
   （打开界面时给 SystemUI 发一条 `com.lyricpatch.PING`，hook 侧收到就回写一次报活；
@@ -87,6 +90,10 @@ targetSdk 37 会强制 edge-to-edge，设置页已经用 `enableEdgeToEdge()` + 
   重新拉一次（还有 5 分钟一次的兜底轮询）；读取永远在后台线程，不卡取词和绘制，
   所以**不用重启**，下一次取词就生效；
 - 「状态栏预览」那张卡片会跑一遍逐字高亮，并标出当前的滚动参数；
+- 大标题可点击收起/展开；点预览卡下方的「外观」进入独立页面：关掉莫奈取色后可选
+  8 个预设主题色；可关掉「大标题折叠」回到固定标题样式；还可把保存条改为「上滑呼出」——
+  底部只留一条细线，上滑沿原路升出、下滑沿原路收回。
+  这些属于纯界面偏好，存在 App 自己的 SharedPreferences（`ui_prefs`），不写进 `lyricpatch.conf`。
 - 文件里手写的未知键不会被删，只按面板上的键覆盖/重写。
 
 ## 调试

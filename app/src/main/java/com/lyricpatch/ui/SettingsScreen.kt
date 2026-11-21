@@ -1,6 +1,14 @@
 package com.lyricpatch.ui
 
+import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -11,6 +19,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -78,6 +90,15 @@ fun SettingsScreen() {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // 大标题收起：key 用标题文字，默认展开；关掉折叠开关时一律展开
+    val openSections = remember { mutableStateMapOf<String, Boolean>() }
+    val collapsible = UiPrefs.collapsible
+
+    fun open(key: String): Boolean = !collapsible || (openSections[key] ?: true)
+
+    // 上滑模式下的保存条是否已呼出
+    var saveBarShown by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val version = remember(context) {
         runCatching {
@@ -137,7 +158,10 @@ fun SettingsScreen() {
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(hostState = snackbar) },
         bottomBar = {
-            SaveBar(busy = state.busy, onReload = onReload, onSave = onSave)
+            // 常驻模式才占 Scaffold 底栏；上滑模式走浮层，不占高度
+            if (!UiPrefs.floatingSaveBar) {
+                SaveBar(busy = state.busy, dirty = state.dirty, onReload = onReload, onSave = onSave)
+            }
         },
     ) { inner ->
         if (!state.loaded) {
@@ -147,6 +171,7 @@ fun SettingsScreen() {
             return@Scaffold
         }
 
+        Box(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(inner),
             contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
@@ -167,7 +192,47 @@ fun SettingsScreen() {
                     delayMs = state.num("word_scroll_delay", 500),
                 )
             }
-            item { SectionHeader("数据源", "按顺序匹配，使用第一个返回歌词的源") }
+            item {
+                SettingsCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable {
+                                context.startActivity(
+                                    Intent(context, AppearanceActivity::class.java),
+                                )
+                            }
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("外观", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "取色方式与大标题折叠",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Icon(
+                            Icons.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            item {
+                SectionHeader(
+                    "数据源",
+                    "按顺序匹配，使用第一个返回歌词的源",
+                    expanded = open("数据源"),
+                    onToggle = if (collapsible) {
+                        ({ openSections["数据源"] = !open("数据源") })
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (open("数据源")) {
             item {
                 SettingsCard {
                     FieldRow(
@@ -190,7 +255,21 @@ fun SettingsScreen() {
                 CardNote("「状态栏歌词源」优先，未命中时按上方顺序。")
             }
 
-            item { SectionHeader("翻译", "控制第二行显示内容") }
+            }
+
+            item {
+                SectionHeader(
+                    "翻译",
+                    "控制第二行显示内容",
+                    expanded = open("翻译"),
+                    onToggle = if (collapsible) {
+                        ({ openSections["翻译"] = !open("翻译") })
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (open("翻译")) {
             item {
                 SettingsCard {
                     SwitchRow(
@@ -238,7 +317,21 @@ fun SettingsScreen() {
                 }
             }
 
-            item { SectionHeader("逐字", "逐字来源与补充方式") }
+            }
+
+            item {
+                SectionHeader(
+                    "逐字",
+                    "逐字来源与补充方式",
+                    expanded = open("逐字"),
+                    onToggle = if (collapsible) {
+                        ({ openSections["逐字"] = !open("逐字") })
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (open("逐字")) {
             item {
                 SettingsCard {
                     SwitchRow(
@@ -295,7 +388,21 @@ fun SettingsScreen() {
                 }
             }
 
-            item { SectionHeader("长句滚动", "处理超出控件宽度的歌词行") }
+            }
+
+            item {
+                SectionHeader(
+                    "长句滚动",
+                    "处理超出控件宽度的歌词行",
+                    expanded = open("长句滚动"),
+                    onToggle = if (collapsible) {
+                        ({ openSections["长句滚动"] = !open("长句滚动") })
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (open("长句滚动")) {
             item {
                 SettingsCard {
                     SwitchRow(
@@ -338,7 +445,21 @@ fun SettingsScreen() {
                 CardNote("ROM 的逐字绘制不会滚动，超宽部分会被裁切。开启跟随后先静止，接近右边缘再滚动；关闭则从行首滚动。")
             }
 
-            item { SectionHeader("应用过滤", "白名单与黑名单二选一") }
+            }
+
+            item {
+                SectionHeader(
+                    "应用过滤",
+                    "白名单与黑名单二选一",
+                    expanded = open("应用过滤"),
+                    onToggle = if (collapsible) {
+                        ({ openSections["应用过滤"] = !open("应用过滤") })
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (open("应用过滤")) {
             item {
                 SettingsCard {
                     val white = state.raw("app_whitelist")
@@ -363,7 +484,21 @@ fun SettingsScreen() {
                 }
             }
 
-            item { SectionHeader("调试", "adb logcat -s LyricPatch") }
+            }
+
+            item {
+                SectionHeader(
+                    "调试",
+                    "adb logcat -s LyricPatch",
+                    expanded = open("调试"),
+                    onToggle = if (collapsible) {
+                        ({ openSections["调试"] = !open("调试") })
+                    } else {
+                        null
+                    },
+                )
+            }
+            if (open("调试")) {
             item {
                 SettingsCard {
                     // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
@@ -385,6 +520,8 @@ fun SettingsScreen() {
                 }
             }
 
+            }
+
             item {
                 CardNote("保存后立即生效，无需重启 SystemUI。首次启用模块或更换 SystemUI 版本后需重启一次。")
             }
@@ -397,6 +534,18 @@ fun SettingsScreen() {
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
+        }
+
+        if (UiPrefs.floatingSaveBar) {
+            SlideUpSaveBar(
+                shown = saveBarShown,
+                onShownChange = { saveBarShown = it },
+                busy = state.busy,
+                dirty = state.dirty,
+                onReload = onReload,
+                onSave = onSave,
+            )
+        }
         }
     }
 }
@@ -566,77 +715,6 @@ private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
 }
 
 @Composable
-private fun SectionHeader(title: String, subtitle: String?) {
-    Column(Modifier.padding(start = 26.dp, end = 26.dp, top = 26.dp, bottom = 10.dp)) {
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        if (subtitle != null) {
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(content = content)
-    }
-}
-
-@Composable
-private fun CardNote(text: String) {
-    Text(
-        text,
-        modifier = Modifier.padding(start = 26.dp, end = 26.dp, top = 10.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
-
-@Composable
-private fun RowDivider() {
-    HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 20.dp),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-    )
-}
-
-@Composable
-private fun SwitchRow(
-    title: String,
-    subtitle: String?,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 20.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
 private fun FieldRow(
     label: String,
     value: String,
@@ -772,49 +850,122 @@ private fun SliderRow(
 }
 
 @Composable
-private fun InfoRow(title: String, value: String) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 13.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            value,
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun SaveBar(
+    busy: Boolean,
+    dirty: Boolean,
+    onReload: () -> Unit,
+    onSave: () -> Unit,
+    floating: Boolean = false,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        tonalElevation = 3.dp,
+        shape = if (floating) RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp) else RectangleShape,
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            if (floating) {
+                Box(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier.width(40.dp).height(4.dp).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(onClick = onReload, enabled = !busy, shape = CircleShape) {
+                    Text("重新读取")
+                }
+                Spacer(Modifier.width(12.dp))
+                Button(
+                    onClick = onSave,
+                    // 已同步（没有未保存改动）时置灰
+                    enabled = !busy && dirty,
+                    shape = CircleShape,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text("保存")
+                    }
+                }
+            }
+        }
     }
 }
 
+/**
+ * 可上滑/下滑的保存条：平时只留底部一条细线，上滑沿原路升出，下滑沿原路收回。
+ */
 @Composable
-private fun SaveBar(
+private fun SlideUpSaveBar(
+    shown: Boolean,
+    onShownChange: (Boolean) -> Unit,
     busy: Boolean,
+    dirty: Boolean,
     onReload: () -> Unit,
     onSave: () -> Unit,
 ) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedButton(onClick = onReload, enabled = !busy, shape = CircleShape) {
-                Text("重新读取")
-            }
-            Spacer(Modifier.width(12.dp))
-            Button(
-                onClick = onSave,
-                enabled = !busy,
-                shape = CircleShape,
-                modifier = Modifier.weight(1f),
+    Box(Modifier.fillMaxSize()) {
+        if (!shown) {
+            Box(
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .pointerInput(Unit) {
+                        var dragged = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { dragged = 0f },
+                            onVerticalDrag = { _, delta -> dragged += delta },
+                            onDragEnd = { if (dragged < -24f) onShownChange(true) },
+                        )
+                    },
+                contentAlignment = Alignment.BottomCenter,
             ) {
-                if (busy) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
+                Box(
+                    Modifier.padding(bottom = 8.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = shown,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Box(
+                modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+                    var dragged = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { dragged = 0f },
+                        onVerticalDrag = { _, delta -> dragged += delta },
+                        onDragEnd = { if (dragged > 24f) onShownChange(false) },
                     )
-                } else {
-                    Text("保存")
-                }
+                },
+            ) {
+                SaveBar(
+                    busy = busy,
+                    dirty = dirty,
+                    onReload = onReload,
+                    onSave = onSave,
+                    floating = true,
+                )
             }
         }
     }

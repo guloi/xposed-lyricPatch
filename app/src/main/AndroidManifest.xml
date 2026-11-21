@@ -36,5 +36,13 @@
             </intent-filter>
         </activity>
 
+        <!-- 外观页：取色方式与大标题折叠 -->
+        <activity
+            android:name=".ui.AppearanceActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:parentActivityName=".ui.SettingsActivity"
+            android:theme="@style/Theme.LyricPatch" />
+
     </application>
 </manifest>
