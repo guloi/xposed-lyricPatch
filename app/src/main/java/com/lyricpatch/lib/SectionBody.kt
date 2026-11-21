@@ -1,8 +1,11 @@
 package com.lyricpatch.lib
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,12 +35,18 @@ fun SectionBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) 
     }
 }
 
+/** 展开用弹簧、收回用 tween，避免弹簧收尾的顿挫 */
+private fun bodySpec(expanded: Boolean): AnimationSpec<Float> =
+    if (expanded) bouncy() else tween(200, easing = FastOutSlowInEasing)
+
 /** 默认：单一进度驱动高度与缩放，内容始终组合，输入框状态不会丢 */
 @Composable
 private fun ProgressBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = bouncy(),
+        // 展开用弹簧（有回弹），收回用 tween：弹簧收尾会很慢地蹭到 0 再小过冲一下，
+        // 看着就是“顿一下又弹一下”的卡顿感
+        animationSpec = bodySpec(expanded),
         label = "section-body",
     )
 
@@ -67,7 +76,12 @@ private fun ProgressBody(expanded: Boolean, content: @Composable ColumnScope.() 
 private fun SpringBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow),
+        // 同 ProgressBody：收回不用弹簧，避免尾部顿挫
+        animationSpec = if (expanded) {
+            spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)
+        } else {
+            tween(200, easing = FastOutSlowInEasing)
+        },
         label = "section-body-spring",
     )
     val travelPx = with(LocalDensity.current) { 32.dp.toPx() }
