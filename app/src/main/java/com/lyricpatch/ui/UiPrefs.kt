@@ -3,6 +3,8 @@ package com.lyricpatch.ui
 import android.content.Context
 import androidx.compose.runtime.getValue
 import com.lyricpatch.lib.UiKeys
+import com.lyricpatch.lib.color.ColorSpec
+import com.lyricpatch.lib.color.ColorStyle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
@@ -49,6 +51,12 @@ object UiPrefs {
     var bouncePercent by mutableStateOf(18)
         private set
 
+    /** 色彩风格 / 色彩标准：仅在关闭莫奈取色、使用自定义颜色时生效 */
+    var colorStyle by mutableStateOf(ColorStyle.EXPRESSIVE)
+        private set
+    var colorSpec by mutableStateOf(ColorSpec.SPEC_2025)
+        private set
+
     /** 给动画用的缩放幅度 */
     val bounceScale: Float
         get() = bouncePercent / 100f
@@ -64,6 +72,8 @@ object UiPrefs {
         collapsible = p.getBoolean(KEY_COLLAPSE, true)
         floatingSaveBar = p.getBoolean(KEY_FLOATING_BAR, false)
         bouncePercent = p.getInt(KEY_BOUNCE, 18).coerceIn(0, 30)
+        colorStyle = ColorStyle.of(p.getString(UiKeys.COLOR_STYLE, null))
+        colorSpec = ColorSpec.of(p.getString(UiKeys.COLOR_SPEC, null))
         collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, true)
         sectionsSeen = p.getBoolean(KEY_SECTIONS_SEEN, false)
     }
@@ -92,6 +102,16 @@ object UiPrefs {
 
     fun updateSectionOpen(title: String, open: Boolean) {
         prefs?.edit()?.putBoolean(KEY_SECTION_PREFIX + title, open)?.apply()
+    }
+
+    fun updateColorStyle(style: ColorStyle) {
+        colorStyle = style
+        prefs?.edit()?.putString(UiKeys.COLOR_STYLE, style.name)?.apply()
+    }
+
+    fun updateColorSpec(spec: ColorSpec) {
+        colorSpec = spec
+        prefs?.edit()?.putString(UiKeys.COLOR_SPEC, spec.name)?.apply()
     }
 
     fun updateBounce(percent: Int) {

@@ -234,6 +234,24 @@ translation_providers=https://my.server
 响应可以是 JSON（取 `tlyric` / `translation` / `translated`，兼容嵌套 `{"tlyric":{"lyric":"..."}}`），
 也可以直接返回 LRC 文本。
 
+## 代码结构
+
+```
+app/src/main/java/com/lyricpatch/
+├─ lib/        跨文件复用的组件与工具（一组件一文件，可继续建子目录）
+├─ pages/      页面（一个页面一个文件，Activity 只做壳）
+└─ ui/         Activity / 主题 / 配置读写 / 崩溃记录
+```
+
+约定：
+
+1. 新页面放 `pages/`，Activity 留在 `ui/` 里只负责 `setContent`；
+2. 只有**被多个文件使用**的东西才提到 `lib`；只服务单个文件的（哪怕调用多次）留在原文件里，用 `private`；
+3. 页面独有、与页面 state 强耦合的组件留在 `pages`；
+4. 新增开关 / 配置项时，先看 `lib/Keys.kt` 和其他文件已有的声明方式，按同一规则补：
+   面向 SystemUI 的写进 `ConfKeys`（同步 `ConfigStore.ORDER` / `DEFAULTS`），
+   纯界面偏好写进 `UiKeys`；页面里一律用 `ConfKeys.XXX` 访问，不在调用点写字面量。
+
 ## 实现要点
 
 - 估算逐字按字重分配整行时长（汉字/假名 2、其余 1），最后一个字正好在下一行开始时结束。

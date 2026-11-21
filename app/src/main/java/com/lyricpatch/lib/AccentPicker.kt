@@ -36,15 +36,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import com.lyricpatch.ui.UiPrefs
-import com.lyricpatch.ui.accentColor
+import com.lyricpatch.lib.color.accentColor
 import java.util.Locale
 
 /**
- * HSL → #RRGGBB。
- *
- * ColorUtils.HSLToColor 要求 h ∈ [0,360)、s/l ∈ [0,1]，越界会直接抛异常，所以先夹一遍。
+ * HSL → #RRGGBB。只有本文件在用，所以留在原文件，不往 lib 提。
+ * ColorUtils.HSLToColor 要求 h ∈ [0,360)、s/l ∈ [0,1]，越界会抛异常，先夹一遍。
  */
-private fun hexOf(h: Float, s: Float, l: Float): String {
+private fun hslToHex(h: Float, s: Float, l: Float): String {
     val hue = ((h % 360f) + 360f) % 360f
     val argb = ColorUtils.HSLToColor(
         floatArrayOf(hue, s.coerceIn(0f, 1f), l.coerceIn(0f, 1f)),
@@ -160,15 +159,15 @@ private fun CustomAccentSliders() {
     // 上限用 359 而不是 360：HSL 的色相是左闭右开，360 属于非法值
     ColorSlider("色相", hue, 0f..359f) {
         hue = it
-        UiPrefs.updateAccent(hexOf(hue, sat, light))
+        UiPrefs.updateAccent(hslToHex(hue, sat, light))
     }
     ColorSlider("饱和度", sat, 0f..1f) {
         sat = it
-        UiPrefs.updateAccent(hexOf(hue, sat, light))
+        UiPrefs.updateAccent(hslToHex(hue, sat, light))
     }
     ColorSlider("明度", light, 0.08f..0.92f) {
         light = it
-        UiPrefs.updateAccent(hexOf(hue, sat, light))
+        UiPrefs.updateAccent(hslToHex(hue, sat, light))
     }
 }
 

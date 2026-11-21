@@ -5,7 +5,7 @@ import android.net.Uri
 import com.lyricpatch.lib.*
 import com.lyricpatch.ui.AppearanceActivity
 import com.lyricpatch.ui.ConfigStore
-import com.lyricpatch.ui.CrashLogger
+import com.lyricpatch.lib.debug.CrashLogger
 import com.lyricpatch.ui.UiPrefs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically

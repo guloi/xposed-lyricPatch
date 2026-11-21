@@ -29,9 +29,11 @@ fun <T> bouncy(): SpringSpec<T> = spring(
 @Composable
 fun rememberPopScale(key: Any?): Float {
     val amplitude = UiPrefs.bounceScale
-    val anim = remember { Animatable(0f) }
-    LaunchedEffect(key) {
-        anim.snapTo(0f)
+    // 每次 key 变化都换一个新的 Animatable（初值 0），而不是对同一个实例 snapTo：
+    // snapTo 落在协程被取消的窗口里会抛 CancellationException，把后面的 animateTo 一起带走，
+    // 结果 anim 停在 0（sin(π·0)=0）——表现就是“这一次没有回弹”。
+    val anim = remember(key) { Animatable(0f) }
+    LaunchedEffect(anim) {
         runCatching {
             anim.animateTo(1f, animationSpec = tween(durationMillis = 260))
         }

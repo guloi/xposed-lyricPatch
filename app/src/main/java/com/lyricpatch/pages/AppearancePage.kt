@@ -27,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.*
+import com.lyricpatch.lib.color.ColorSpec
+import com.lyricpatch.lib.color.ColorStyle
 import com.lyricpatch.ui.UiPrefs
 
 /** 外观页：取色方式 / 大标题折叠 / 回弹幅度 / 保存条 */
@@ -66,6 +68,22 @@ fun AppearancePage(onBack: () -> Unit) {
                     Column {
                         RowDivider()
                         AccentPicker()
+                        RowDivider()
+                        ChoiceRow(
+                            title = "色彩风格",
+                            subtitle = "种子色如何映射到主色与三色",
+                            options = ColorStyle.entries.map { it.name to it.label },
+                            selected = UiPrefs.colorStyle.name,
+                            onSelect = { UiPrefs.updateColorStyle(ColorStyle.of(it)) },
+                        )
+                        RowDivider()
+                        ChoiceRow(
+                            title = "色彩标准",
+                            subtitle = "容器明度档位，2025 对应 Expressive",
+                            options = ColorSpec.entries.map { it.name to it.label },
+                            selected = UiPrefs.colorSpec.name,
+                            onSelect = { UiPrefs.updateColorSpec(ColorSpec.of(it)) },
+                        )
                     }
                 }
             }

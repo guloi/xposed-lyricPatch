@@ -1,4 +1,4 @@
-package com.lyricpatch.ui
+package com.lyricpatch.lib.debug
 
 import android.content.Context
 import android.util.Log

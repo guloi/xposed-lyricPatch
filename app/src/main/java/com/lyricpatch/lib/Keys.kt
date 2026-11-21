@@ -46,6 +46,8 @@ object UiKeys {
     const val SECTIONS_SEEN = "sections_seen"
     const val FLOATING_SAVE_BAR = "floating_save_bar"
     const val BOUNCE = "bounce_percent"
+    const val COLOR_STYLE = "color_style"
+    const val COLOR_SPEC = "color_spec"
 
     /** 每个大标题的折叠状态：section_<标题> */
     const val SECTION_PREFIX = "section_"

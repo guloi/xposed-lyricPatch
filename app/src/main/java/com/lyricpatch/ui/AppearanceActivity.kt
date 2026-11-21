@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.lyricpatch.lib.debug.CrashLogger
 import com.lyricpatch.pages.AppearancePage
 
 /** 外观页容器；内容在 pages/AppearancePage.kt */
