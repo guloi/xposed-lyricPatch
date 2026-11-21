@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.lyricpatch.ui.UiPrefs
 
 /**
  * 大标题。onToggle 不为 null 时整行可点，右侧带箭头表示收起状态。
@@ -36,8 +37,11 @@ fun SectionHeader(
         animationSpec = tween(200),
         label = "section-arrow",
     )
-    // 整张卡片弹一下（幅度由「外观 → 回弹幅度」控制），比只弹箭头明显得多
-    val pop = rememberPopScale(expanded, factor = 0.6f)
+    // 整张卡片弹一下；可在「外观 → 大标题跳动」里关掉（factor 0 即无弹动）
+    val pop = rememberPopScale(
+        expanded,
+        factor = if (UiPrefs.sectionHeaderPop) 0.6f else 0f,
+    )
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
             .graphicsLayer {

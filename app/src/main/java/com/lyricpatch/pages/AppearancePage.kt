@@ -138,6 +138,13 @@ fun AppearancePage(onBack: () -> Unit) {
                 )
                 RowDivider()
                 SwitchRow(
+                    title = "大标题跳动",
+                    subtitle = "点击大标题时整块卡片弹一下",
+                    checked = UiPrefs.sectionHeaderPop,
+                    onCheckedChange = { UiPrefs.updateSectionHeaderPop(it) },
+                )
+                RowDivider()
+                SwitchRow(
                     title = "弹簧式展开",
                     subtitle = "内容先多下沉一点再回到正确位置",
 

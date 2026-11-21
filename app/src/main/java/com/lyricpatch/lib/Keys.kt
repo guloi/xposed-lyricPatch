@@ -49,6 +49,7 @@ object UiKeys {
     const val COLOR_STYLE = "color_style"
     const val COLOR_SPEC = "color_spec"
     const val SECTION_LEGACY_ANIM = "section_legacy_anim"
+    const val SECTION_HEADER_POP = "section_header_pop"
 
     /** 每个大标题的折叠状态：section_<标题> */
     const val SECTION_PREFIX = "section_"

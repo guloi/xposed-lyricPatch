@@ -57,8 +57,12 @@ object UiPrefs {
     var colorSpec by mutableStateOf(ColorSpec.SPEC_2025)
         private set
 
-    /** 分组展开/收起使用旧实现（AnimatedVisibility） */
+    /** 分组展开/收起使用弹簧下沉式动画 */
     var sectionLegacyAnim by mutableStateOf(false)
+        private set
+
+    /** 大标题点击时整块卡片是否弹一下 */
+    var sectionHeaderPop by mutableStateOf(true)
         private set
 
     /** 给动画用的缩放幅度 */
@@ -79,6 +83,7 @@ object UiPrefs {
         colorStyle = ColorStyle.of(p.getString(UiKeys.COLOR_STYLE, null))
         colorSpec = ColorSpec.of(p.getString(UiKeys.COLOR_SPEC, null))
         sectionLegacyAnim = p.getBoolean(UiKeys.SECTION_LEGACY_ANIM, false)
+        sectionHeaderPop = p.getBoolean(UiKeys.SECTION_HEADER_POP, true)
         collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, true)
         sectionsSeen = p.getBoolean(KEY_SECTIONS_SEEN, false)
     }
@@ -107,6 +112,11 @@ object UiPrefs {
 
     fun updateSectionOpen(title: String, open: Boolean) {
         prefs?.edit()?.putBoolean(KEY_SECTION_PREFIX + title, open)?.apply()
+    }
+
+    fun updateSectionHeaderPop(on: Boolean) {
+        sectionHeaderPop = on
+        prefs?.edit()?.putBoolean(UiKeys.SECTION_HEADER_POP, on)?.apply()
     }
 
     fun updateSectionLegacyAnim(on: Boolean) {

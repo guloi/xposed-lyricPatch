@@ -12,8 +12,8 @@ android {
         applicationId "com.lyricpatch"
         minSdk 29
         targetSdk 37
-        versionCode 92
-        versionName "4.61"
+        versionCode 93
+        versionName "4.62"
     }
 
     buildFeatures {

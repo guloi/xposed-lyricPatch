@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.lyricpatch.ui.UiPrefs
 
 /**
  * 卡片内部的子标题：样式比大标题小一级，但同样可收起。
@@ -36,7 +37,11 @@ fun SubHeader(
         animationSpec = tween(200),
         label = "sub-arrow",
     )
-    val pop = rememberPopScale(expanded, factor = 0.5f)
+    // 子标题同样受「大标题跳动」开关控制
+    val pop = rememberPopScale(
+        expanded,
+        factor = if (UiPrefs.sectionHeaderPop) 0.5f else 0f,
+    )
     Row(
         modifier = Modifier.fillMaxWidth()
             .graphicsLayer {
