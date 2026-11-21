@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
@@ -113,6 +114,8 @@ fun SettingsScreen() {
     // 上滑模式下的保存条是否已呼出
     val saveBarShown = remember { mutableStateOf(false) }
 
+    val listState = rememberLazyListState()
+
     // 跟随列表滑动：手指往上滑（内容向上滚）呼出，往下滑收回
     val scrollConnection = remember {
         object : NestedScrollConnection {
@@ -201,6 +204,7 @@ fun SettingsScreen() {
         }
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().padding(inner).nestedScroll(scrollConnection),
             contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
         ) {
@@ -557,6 +561,8 @@ fun SettingsScreen() {
     if (UiPrefs.floatingSaveBar) {
         SlideUpSaveBar(
             shown = saveBarShown.value,
+            // 内容滚不动（不足一屏）时才留那条细线当入口
+            showHandle = !listState.canScrollForward && !listState.canScrollBackward,
             onShownChange = { saveBarShown.value = it },
             busy = state.busy,
             dirty = state.dirty,
@@ -930,6 +936,7 @@ private fun SaveBar(
 @Composable
 private fun SlideUpSaveBar(
     shown: Boolean,
+    showHandle: Boolean,
     onShownChange: (Boolean) -> Unit,
     busy: Boolean,
     dirty: Boolean,
@@ -951,7 +958,7 @@ private fun SlideUpSaveBar(
     )
 
     Box(Modifier.fillMaxSize()) {
-        if (!shown) {
+        if (!shown && showHandle) {
             Box(
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
