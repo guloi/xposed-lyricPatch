@@ -30,7 +30,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.0";
+    private static final String VERSION = "4.3";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -97,10 +97,16 @@ public final class LyricPatchModule extends XposedModule {
                 //  - 设置为空：正常补源（内置 Apple/LrcLib 垫底）
                 //  - 设置非空：我们也会按同样协议去问那个 base，但能完整保留 yrc（逐字）；
                 //    ROM 自带 HttpLyricSource 只读 lrc/tlyric，会把逐字丢掉
-                if (source != null) out.add(source);
+                // 启动时创建失败过就再试一次（失败原因会被重新打一遍，不会再被刷掉）
+                Object src = source != null ? source : LyricSourceProxy.get(cl);
+                if (src != null) out.add(src);
 
                 Object original = chain.proceed();
                 if (original instanceof List) out.addAll((List<?>) original);
+
+                // 每次 create 都打一条：能直接看出“源到底插进去没”和“设置里填了什么”
+                log(Log.INFO, TAG, "create: setting='" + brief(setting)
+                        + "' proxy=" + (src != null) + " total=" + out.size(), null);
 
                 return out;
             });

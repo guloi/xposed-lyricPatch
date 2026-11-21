@@ -39,24 +39,49 @@ public final class LyricSourceProxy implements InvocationHandler {
     public static synchronized Object get(ClassLoader cl) {
         if (sSource != null) return sSource;
         try {
-            Class<?> sourceClass = Class.forName(CLS_SOURCE, false, cl);
-            Class<?> parserClass = Class.forName(CLS_PARSER, false, cl);
+            Class<?> sourceClass;
+            Class<?> parserClass;
+            try {
+                sourceClass = Class.forName(CLS_SOURCE, false, cl);
+                parserClass = Class.forName(CLS_PARSER, false, cl);
+            } catch (Throwable t) {
+                Util.logw("proxy fail @load classes", t);
+                return null;
+            }
 
-            sParseLyricText = parserClass.getMethod("parseLyricText", String.class);
-            sParseLyrics = parserClass.getMethod("parseLyrics", JSONObject.class);
+            try {
+                sParseLyricText = parserClass.getMethod("parseLyricText", String.class);
+                sParseLyrics = parserClass.getMethod("parseLyrics", JSONObject.class);
+            } catch (Throwable t) {
+                Util.logw("proxy fail @parser methods", t);
+                return null;
+            }
 
-            // 自己重建 Cue / Lyrics 要用（贴翻译兜底）
-            sCueCtor = Class.forName(CLS_CUE, false, cl)
-                    .getConstructor(long.class, String.class, String.class, List.class);
-            sLyricsCtor = Class.forName(CLS_LYRICS, false, cl)
-                    .getConstructor(TreeMap.class, String.class);
+            // 自己重建 Cue / Lyrics 要用（贴翻译兜底）。
+            // 单独 try：拿不到构造器也只是关掉“翻译重贴”，不能因此让整个代理变成 null，
+            // 否则我们的源根本不会进列表，而且一条日志都没有。
+            try {
+                sCueCtor = Class.forName(CLS_CUE, false, cl)
+                        .getConstructor(long.class, String.class, String.class, List.class);
+                sLyricsCtor = Class.forName(CLS_LYRICS, false, cl)
+                        .getConstructor(TreeMap.class, String.class);
+            } catch (Throwable t) {
+                sCueCtor = null;
+                sLyricsCtor = null;
+                Util.logw("Cue/Lyrics ctor unavailable, translation rewrite disabled", t);
+            }
 
             ClassLoader target = sourceClass.getClassLoader();
             if (target == null) target = cl;
 
-            sSource = Proxy.newProxyInstance(target, new Class<?>[]{sourceClass},
-                    new LyricSourceProxy());
-            Util.log("LyricSource proxy created");
+            try {
+                sSource = Proxy.newProxyInstance(target, new Class<?>[]{sourceClass},
+                        new LyricSourceProxy());
+            } catch (Throwable t) {
+                Util.logw("proxy fail @newProxyInstance", t);
+                return null;
+            }
+            Util.log("LyricSource proxy created (rewrite=" + (sCueCtor != null) + ")");
         } catch (Throwable t) {
             Util.logw("create LyricSource proxy failed", t);
         }
