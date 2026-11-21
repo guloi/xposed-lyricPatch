@@ -7,6 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.lyricpatch.ui.UiPrefs
 import kotlin.math.PI
@@ -29,11 +30,19 @@ fun <T> bouncy(): SpringSpec<T> = spring(
 @Composable
 fun rememberPopScale(key: Any?, factor: Float = 1f): Float {
     val amplitude = UiPrefs.bounceScale * factor
-    // 每次 key 变化都换一个新的 Animatable（初值 0），而不是对同一个实例 snapTo：
+    // 每次 key 变化都换一个新的 Animatable（初值 0）：
     // snapTo 落在协程被取消的窗口里会抛 CancellationException，把后面的 animateTo 一起带走，
     // 结果 anim 停在 0（sin(π·0)=0）——表现就是“这一次没有回弹”。
     val anim = remember(key) { Animatable(0f) }
+    // 首次组合不播：LazyColumn 在别处展开时可能重建相邻分组，
+    // 重建就弹一下会让“别的选项卡跟着跳”，所以第一帧直接落到无缩放状态。
+    val firstPass = remember { mutableStateOf(true) }
     LaunchedEffect(anim) {
+        if (firstPass.value) {
+            firstPass.value = false
+            runCatching { anim.snapTo(1f) }
+            return@LaunchedEffect
+        }
         runCatching {
             anim.animateTo(1f, animationSpec = tween(durationMillis = 260))
         }
