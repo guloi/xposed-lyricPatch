@@ -62,7 +62,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     title = "莫奈取色",
                     subtitle = "跟随壁纸生成配色（Android 12 及以上）",
                     checked = UiPrefs.dynamicColor,
-                    onCheckedChange = { UiPrefs.setDynamicColor(it) },
+                    onCheckedChange = { UiPrefs.updateDynamicColor(it) },
                 )
                 if (!UiPrefs.dynamicColor) {
                     RowDivider()
@@ -78,7 +78,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     title = "大标题折叠",
                     subtitle = "点击大标题可收起该分组",
                     checked = UiPrefs.collapsible,
-                    onCheckedChange = { UiPrefs.setCollapsible(it) },
+                    onCheckedChange = { UiPrefs.updateCollapsible(it) },
                 )
             }
             CardNote("关闭后恢复为固定标题样式，所有分组始终展开。")
@@ -90,7 +90,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     title = "保存条上滑呼出",
                     subtitle = "不常驻底部；上滑显示，下滑收起",
                     checked = UiPrefs.floatingSaveBar,
-                    onCheckedChange = { UiPrefs.setFloatingSaveBar(it) },
+                    onCheckedChange = { UiPrefs.updateFloatingSaveBar(it) },
                 )
             }
             CardNote("开启后设置页底部只留一条细线，上滑呼出保存与重新读取。")
@@ -123,7 +123,7 @@ private fun AccentPicker() {
                                 Modifier
                             },
                         )
-                        .clickable { UiPrefs.setAccent(hex) },
+                        .clickable { UiPrefs.updateAccent(hex) },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (selected) {

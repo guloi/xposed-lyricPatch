@@ -54,22 +54,22 @@ object UiPrefs {
         floatingSaveBar = p.getBoolean(KEY_FLOATING_BAR, false)
     }
 
-    fun setFloatingSaveBar(on: Boolean) {
+    fun updateFloatingSaveBar(on: Boolean) {
         floatingSaveBar = on
         prefs?.edit()?.putBoolean(KEY_FLOATING_BAR, on)?.apply()
     }
 
-    fun setDynamicColor(on: Boolean) {
+    fun updateDynamicColor(on: Boolean) {
         dynamicColor = on
         prefs?.edit()?.putBoolean(KEY_DYNAMIC, on)?.apply()
     }
 
-    fun setAccent(hex: String) {
+    fun updateAccent(hex: String) {
         accent = hex
         prefs?.edit()?.putString(KEY_ACCENT, hex)?.apply()
     }
 
-    fun setCollapsible(on: Boolean) {
+    fun updateCollapsible(on: Boolean) {
         collapsible = on
         prefs?.edit()?.putBoolean(KEY_COLLAPSE, on)?.apply()
     }
