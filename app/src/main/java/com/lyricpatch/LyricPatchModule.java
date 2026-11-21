@@ -31,7 +31,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.10";
+    private static final String VERSION = "4.11";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -436,6 +436,7 @@ public final class LyricPatchModule extends XposedModule {
 
     private static String sInjectedKey;
     private static volatile boolean sInjecting;
+    private static long sLastAttemptAt;
 
     /**
      * 最后一道兑底：ROM 显示用的就是 mCurrentLyrics，这里发现它没逐字，
@@ -468,7 +469,12 @@ public final class LyricPatchModule extends XposedModule {
 
         final String key = title + "|" + artist + "|" + dur;
         if (key.equals(sInjectedKey) || sInjecting) return;
-        sInjectedKey = key;
+
+        // 注意：这里不写 sInjectedKey —— 换歌瞬间 mCurrentLyrics 可能还是 null，
+        // 写了就会“一次失败，整首都不再试”。成功之后才记下。
+        long now = System.currentTimeMillis();
+        if (now - sLastAttemptAt < 1500L) return;
+        sLastAttemptAt = now;
         sInjecting = true;
 
         final String fTitle = title;
@@ -499,7 +505,8 @@ public final class LyricPatchModule extends XposedModule {
                 }
 
                 if (target == null) {
-                    log(Log.INFO, TAG, "inject: 没有可用的逐字 (" + fTitle + ")", null);
+                    // 不记 key，下一行刷新会（限速 1.5s 后）再试一次
+                    log(Log.INFO, TAG, "inject: 暂时没有逐字，稍后重试 (" + fTitle + ")", null);
                     return;
                 }
 
@@ -509,6 +516,7 @@ public final class LyricPatchModule extends XposedModule {
                         writeField(ctrl, "mCurrentLyrics", merged);
                         Method update = findMethod(ctrl, "updateDisplayedLyric");
                         if (update != null) update.invoke(ctrl);
+                        sInjectedKey = key;
                         log(Log.INFO, TAG, "inject: 已注入逐字 (" + fTitle + ")", null);
                     } catch (Throwable t) {
                         log(Log.WARN, TAG, "inject apply failed", t);
