@@ -126,6 +126,16 @@ public final class LyricFetcher {
             }
         }
 
+        // 还是没有逐字？用行时间轴合成一份，让状态栏也有卡拉OK动画
+        if (bundle != null && Util.isEmpty(bundle.yrc) && !Util.isEmpty(bundle.lrc)
+                && Util.confBool("synth_word_timing", true)) {
+            String yrc = WordTiming.synth(bundle.lrc);
+            if (yrc != null) {
+                bundle.yrc = yrc;
+                Util.log("synth word timing: " + title);
+            }
+        }
+
         CACHE.put(key, new Entry(bundle, now + (bundle == null ? MISS_TTL : OK_TTL)));
         if (CACHE.size() > 128) CACHE.clear();
         return bundle;

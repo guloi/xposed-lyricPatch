@@ -11,6 +11,11 @@ public final class Netease {
             "https://music.163.com/api/search/get?s=%s&type=1&offset=0&limit=10";
     private static final String LYRIC =
             "https://music.163.com/api/song/lyric?id=%s&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1";
+
+    /** 新版歌词接口：部分歌只有它才返回逐字 yrc / 逐字翻译 ytlrc */
+    private static final String LYRIC_V1 =
+            "https://music.163.com/api/song/lyric/v1?id=%s&cp=false"
+                    + "&lv=-1&kv=-1&tv=-1&rv=-1&yv=-1&ytv=-1&yrv=-1";
     private static final String DETAIL =
             "https://music.163.com/api/song/detail?ids=%5B%s%5D";
     private static final String LRCLIB_GET =
@@ -24,9 +29,54 @@ public final class Netease {
     public static LyricFetcher.Bundle byId(String id, boolean withTranslation) {
         try {
             String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
-            return parseLyric(res, withTranslation);
+            return enrich(id, parseLyric(res, withTranslation), withTranslation);
         } catch (Throwable t) {
             Util.logw("netease byId failed", t);
+            return null;
+        }
+    }
+
+    /**
+     * 经典接口没有逐字时，再问一次新版接口。
+     * 只补缺：只在原结果缺 yrc / tlyric / lrc 时覆盖，不动已有的。
+     */
+    private static LyricFetcher.Bundle enrich(String id, LyricFetcher.Bundle b,
+                                              boolean withTranslation) {
+        if (b == null) return null;
+        if (!Util.isEmpty(b.yrc) && !Util.isEmpty(b.lrc)) return b;
+
+        LyricFetcher.Bundle v1 = lyricV1(id, withTranslation);
+        if (v1 == null) return b;
+
+        if (Util.isEmpty(b.yrc) && !Util.isEmpty(v1.yrc)) {
+            b.yrc = v1.yrc;
+            Util.log("netease lyric/v1 gave word timing: id=" + id);
+        }
+        if (Util.isEmpty(b.lrc) && !Util.isEmpty(v1.lrc)) b.lrc = v1.lrc;
+        if (withTranslation && Util.isEmpty(b.tlyric) && !Util.isEmpty(v1.tlyric)) {
+            b.tlyric = v1.tlyric;
+        }
+        return b;
+    }
+
+    /** 新版接口：优先逐字翻译 ytlrc，其次普通 tlyric */
+    static LyricFetcher.Bundle lyricV1(String id, boolean withTranslation) {
+        try {
+            String res = Util.get(String.format(LYRIC_V1, Util.enc(id)), REFERER);
+            if (Util.isEmpty(res)) return null;
+
+            JSONObject root = new JSONObject(res);
+            LyricFetcher.Bundle b = new LyricFetcher.Bundle();
+            b.lrc = sub(root, "lrc");
+            b.yrc = sub(root, "yrc");
+            if (withTranslation) {
+                String ytl = sub(root, "ytlrc");
+                if (Util.isEmpty(ytl)) ytl = sub(root, "ytlyric");
+                b.tlyric = Util.isEmpty(ytl) ? sub(root, "tlyric") : ytl;
+            }
+            return b;
+        } catch (Throwable t) {
+            Util.logw("netease lyric/v1 failed", t);
             return null;
         }
     }
@@ -83,7 +133,8 @@ public final class Netease {
             if (id == null) return null;
 
             String lyric = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
-            LyricFetcher.Bundle bundle = parseLyric(lyric, withTranslation);
+            LyricFetcher.Bundle bundle = enrich(id, parseLyric(lyric, withTranslation),
+                    withTranslation);
             if (bundle != null) {
                 Util.log("netease hit \"" + title + " / " + artist + "\" -> id=" + id);
             }

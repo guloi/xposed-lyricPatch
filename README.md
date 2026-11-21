@@ -98,6 +98,9 @@ hide_empty_translation=true
 # 中文歌词（无假名 & 汉字占多数）不去翻译源要翻译，避免同名错贴（默认开）
 skip_translation_for_chinese=true
 
+# 没拿到真逐字歌词时，按行时间轴合成一份，让状态栏也有卡拉OK动画（默认开）
+synth_word_timing=true
+
 # 调试：每行刷新打一条 holder: lyric=… | tl=…
 # debug_log=false
 ```
