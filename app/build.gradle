@@ -1,7 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-    id 'org.jetbrains.kotlin.plugin.compose'
 }
 
 android {
@@ -45,24 +43,20 @@ android {
     }
 }
 
-// AGP 9 不再提供 android.kotlinOptions，用 Kotlin 插件自己的 DSL
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
-}
+// Kotlin 由 AGP 内置提供：jvmTarget 取自上面的 compileOptions（17）
 
 dependencies {
     // libxposed API（Maven Central，注意版本号是 102.0.0）
     compileOnly 'io.github.libxposed:api:102.0.0'
 
     // 设置界面：Compose + Material3（Expressive 风格）
-    implementation platform('androidx.compose:compose-bom:2025.06.01')
+    // BOM 先停在 2024.12.01：跟 Kotlin 2.1 配套已验证
+    implementation platform('androidx.compose:compose-bom:2024.12.01')
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.foundation:foundation'
     implementation 'androidx.compose.material3:material3'
-    implementation 'androidx.activity:activity-compose:1.10.1'
-    implementation 'androidx.core:core-ktx:1.16.0'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 }

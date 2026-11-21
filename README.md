@@ -52,11 +52,13 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 |---|---|
 | compileSdk / targetSdk | **37（Android 17）**，跟 ROM 的 SystemUI 对齐 |
 | minSdk | 29 |
-| AGP / Gradle | 9.0.0 / 9.3.0（wrapper 与 CI 同步） |
-| Kotlin | 2.2.0（Compose 编译器插件同版本） |
-| Compose BOM | 2025.06.01 |
+| AGP / Gradle | 8.7.3 / 8.11.1（wrapper 与 CI 同步） |
+| Kotlin | 2.1.0（Compose 编译器插件同版本） |
+| Compose BOM | 2024.12.01 |
 
 需要 JDK 17+；`android-37` 平台由 AGP 自动补装（CI 镜像的 licenses 已接受）。
+AGP 8.7.3 的官方上限是 35，编 37 会报“未测试”警告，`gradle.properties` 里用
+`android.suppressUnsupportedCompileSdk=37` 压掉了；等确认 AGP 9 内置 Kotlin 的用法后再整包升级。
 targetSdk 37 会强制 edge-to-edge，设置页已经用 `enableEdgeToEdge()` + Scaffold insets 处理好了。
 
 

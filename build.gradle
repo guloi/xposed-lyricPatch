@@ -1,6 +1,5 @@
 plugins {
-    // 这一组版本一起动：AGP 9.x 需要 Gradle 9（wrapper 已经是 9.3.0）
+    // 验证 AGP 9：它自带 Kotlin（自己注册 kotlin 扩展），所以这里不引 KGP；
+    // Compose 先不加编译器插件，看 buildFeatures.compose 会不会自动接。
     id 'com.android.application' version '9.0.0' apply false
-    id 'org.jetbrains.kotlin.android' version '2.2.0' apply false
-    id 'org.jetbrains.kotlin.plugin.compose' version '2.2.0' apply false
 }
