@@ -72,6 +72,8 @@ fun SwitchRow(
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = null,
+                        // 拇指底色是 onPrimary（浅色主题下就是白），不显式上色会跟背景同为白
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxSize().graphicsLayer {
                             alpha = 1f - progress
                             rotationZ = -90f * progress
@@ -83,6 +85,7 @@ fun SwitchRow(
                     Icon(
                         imageVector = Icons.Filled.Check,
                         contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.fillMaxSize().graphicsLayer {
                             alpha = progress
                             rotationZ = 90f * (1f - progress)

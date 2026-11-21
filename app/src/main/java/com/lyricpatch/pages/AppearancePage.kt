@@ -138,8 +138,9 @@ fun AppearancePage(onBack: () -> Unit) {
                 )
                 RowDivider()
                 SwitchRow(
-                    title = "旧版展开动画",
-                    subtitle = "改用 AnimatedVisibility，已修好首次组合不播动画的问题",
+                    title = "弹簧式展开",
+                    subtitle = "内容先多下沉一点再回到正确位置",
+
                     checked = UiPrefs.sectionLegacyAnim,
                     onCheckedChange = { UiPrefs.updateSectionLegacyAnim(it) },
                 )
