@@ -80,9 +80,18 @@ val ACCENT_STYLES = listOf(
     ),
 )
 
-/** HSL → #RRGGBB */
+/**
+ * HSL → #RRGGBB。
+ *
+ * ColorUtils.HSLToColor 对参数有严格校验：h 必须在 [0,360)、s/l 在 [0,1]，
+ * 越界（比如把色相滑到最右端得到 360）会直接抛 IllegalArgumentException 把应用弄崩，
+ * 所以这里统一先夹一遍。
+ */
 private fun hexOf(h: Float, s: Float, l: Float): String {
-    val argb = ColorUtils.HSLToColor(floatArrayOf(h, s, l))
+    val hue = ((h % 360f) + 360f) % 360f
+    val argb = ColorUtils.HSLToColor(
+        floatArrayOf(hue, s.coerceIn(0f, 1f), l.coerceIn(0f, 1f)),
+    )
     return String.format(Locale.ROOT, "#%06X", 0xFFFFFF and argb)
 }
 
@@ -196,7 +205,8 @@ private fun CustomAccentSliders() {
         )
     }
 
-    ColorSlider("色相", hue, 0f..360f) {
+    // 上限用 359 而不是 360：HSL 的色相是左闭右开，360 属于非法值
+    ColorSlider("色相", hue, 0f..359f) {
         hue = it
         UiPrefs.updateAccent(hexOf(hue, sat, light))
     }

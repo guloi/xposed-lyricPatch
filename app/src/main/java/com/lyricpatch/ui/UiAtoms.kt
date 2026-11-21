@@ -5,7 +5,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -53,11 +52,7 @@ fun SectionHeader(
     expanded: Boolean = true,
     onToggle: (() -> Unit)? = null,
 ) {
-    val arrow by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = bouncy(),
-        label = "section-arrow",
-    )
+    val arrow = rememberBouncyFloat(if (expanded) 0f else -90f)
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
             .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier),
@@ -102,11 +97,7 @@ fun SubHeader(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    val arrow by animateFloatAsState(
-        targetValue = if (expanded) 0f else -90f,
-        animationSpec = bouncy(),
-        label = "sub-arrow",
-    )
+    val arrow = rememberBouncyFloat(if (expanded) 0f else -90f)
     Row(
         modifier = Modifier.fillMaxWidth()
             .clickable(onClick = onToggle)
@@ -185,11 +176,7 @@ fun SwitchRow(
             onCheckedChange = onCheckedChange,
             // 拇指里同时画勾和叉：靠 alpha / 旋转 / 缩放插值，实现「勾转成叉」的形变
             thumbContent = {
-                val progress by animateFloatAsState(
-                    targetValue = if (checked) 1f else 0f,
-                    animationSpec = bouncy(),
-                    label = "switch-thumb",
-                )
+                val progress = rememberBouncyFloat(if (checked) 1f else 0f)
                 Box(Modifier.size(SwitchDefaults.IconSize)) {
                     Icon(
                         imageVector = Icons.Filled.Close,

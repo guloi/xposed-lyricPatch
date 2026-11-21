@@ -2,6 +2,11 @@ package com.lyricpatch.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -17,6 +22,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
@@ -98,8 +105,8 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
 
     // 分组折叠状态存在 ui_prefs：第一次进入按「默认折叠」初始化并落盘，
-    // 之后每次进入都恢复上次的状态。
-    remember { UiPrefs.ensureSectionDefaults(SECTION_KEYS) }
+    // 之后每次进入都恢复上次的状态。放到 LaunchedEffect 里，避免在组合期间写磁盘 / 写状态。
+    LaunchedEffect(Unit) { UiPrefs.ensureSectionDefaults(SECTION_KEYS) }
     val openSections = remember { mutableStateMapOf<String, Boolean>() }
     val collapsible = UiPrefs.collapsible
 
@@ -145,6 +152,26 @@ fun SettingsScreen() {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "?"
+    }
+
+    // 上次崩过的话，把堆栈弹出来（崩溃时进程已死，只能下次显示）
+    var crashText by remember { mutableStateOf(CrashLogger.take(context)) }
+    if (crashText != null) {
+        AlertDialog(
+            onDismissRequest = { crashText = null },
+            confirmButton = {
+                TextButton(onClick = { crashText = null }) { Text("知道了") }
+            },
+            title = { Text("上次运行崩溃") },
+            text = {
+                Text(
+                    crashText.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall
+                        .copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -440,27 +467,38 @@ fun SettingsScreen() {
                         checked = state.flag("word_scroll_follow"),
                         onCheckedChange = { state.putFlag("word_scroll_follow", it) },
                     )
-                    RowDivider()
-                    // 子折叠：不受「大标题折叠」开关影响，也不参与分组状态落盘
                     val startOpen = remember { mutableStateOf(true) }
-                    SubHeader(
-                        title = "开始滚动的时机",
-                        subtitle = "整句播放到第几成时开始跟随",
-                        expanded = startOpen.value,
-                        onToggle = { startOpen.value = !startOpen.value },
-                    )
-                    SectionBody(startOpen.value) {
-                        SliderRow(
-                            title = "word_scroll_start_pct",
-                            subtitle = "0 为自动（按一屏能装下多少算）",
-                            value = state.num("word_scroll_start_pct", 0),
-                            range = 0f..90f,
-                            steps = 17,
-                            display = state.num("word_scroll_start_pct", 0).let {
-                                if (it <= 0) "自动" else "${it}%"
-                            },
-                            onChange = { state.put("word_scroll_start_pct", it.toString()) },
-                        )
+                    // 只在开启「跟随」时出现；展开收起和全局用同一套弹簧
+                    AnimatedVisibility(
+                        visible = state.flag("word_scroll_follow"),
+                        enter = expandVertically(animationSpec = bouncy()) +
+                            fadeIn(animationSpec = bouncy()),
+                        exit = shrinkVertically(animationSpec = bouncy()) +
+                            fadeOut(animationSpec = bouncy()),
+                    ) {
+                        Column {
+                            RowDivider()
+                            // 子折叠：不受「大标题折叠」开关影响，也不参与分组状态落盘
+                            SubHeader(
+                                title = "开始滚动的时机",
+                                subtitle = "整句播放到第几成时开始跟随",
+                                expanded = startOpen.value,
+                                onToggle = { startOpen.value = !startOpen.value },
+                            )
+                            SectionBody(startOpen.value) {
+                                SliderRow(
+                                    title = "word_scroll_start_pct",
+                                    subtitle = "0 为自动（按一屏能装下多少算）",
+                                    value = state.num("word_scroll_start_pct", 0),
+                                    range = 0f..90f,
+                                    steps = 17,
+                                    display = state.num("word_scroll_start_pct", 0).let {
+                                        if (it <= 0) "自动" else "${it}%"
+                                    },
+                                    onChange = { state.put("word_scroll_start_pct", it.toString()) },
+                                )
+                            }
+                        }
                     }
                     RowDivider()
                     SliderRow(

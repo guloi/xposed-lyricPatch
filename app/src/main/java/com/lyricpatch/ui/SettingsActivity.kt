@@ -10,6 +10,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        CrashLogger.install(this)
         UiPrefs.load(this)
         setContent {
             LyricPatchTheme {
