@@ -1,5 +1,6 @@
 package com.lyricpatch;
 
+import android.os.Handler;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,7 +31,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.5";
+    private static final String VERSION = "4.6";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -349,6 +350,9 @@ public final class LyricPatchModule extends XposedModule {
                     maybeDumpContainer(self);
                 }
 
+                // 最终兑底：屏幕上的 mCurrentLyrics 没逐字就换成我们的
+                maybeInjectWordTiming(self);
+
                 // ② 这一行没翻译 & 机翻也没给出来 → 干脆不显示（hide_empty_translation）
                 if (noTranslation && Util.confBool("hide_empty_translation", true)) {
                     clearSubtitle(readField(self, "mOverlayLyricViewHolder"));
@@ -428,6 +432,113 @@ public final class LyricPatchModule extends XposedModule {
         for (int i = 0; i < group.getChildCount(); i++) {
             dumpView(group.getChildAt(i), sb, depth + 1, maxDepth);
         }
+    }
+
+    private static String sInjectedKey;
+    private static volatile boolean sInjecting;
+
+    /**
+     * 最后一道兑底：ROM 显示用的就是 mCurrentLyrics，这里发现它没逐字，
+     * 就按当前媒体会话的曲名去问一次我们的源（netease / lrclib / kugou…），
+     * 拿到带 yrc 的 Lyrics 后替换 mCurrentLyrics 并让 ROM 重绘。
+     */
+    private void maybeInjectWordTiming(Object self) {
+        if (self == null) return;
+        if (!Util.confBool("auto_word_timing", true)) return;
+
+        Object lyrics = readField(self, "mCurrentLyrics");
+        if (lyrics == null || LyricSourceProxy.resultHasWords(lyrics)) return;
+
+        Object mc = readField(self, "mCurrentMediaController");
+        if (mc == null) return;
+
+        String title = metaString(mc, "android.media.metadata.TITLE");
+        String artist = metaString(mc, "android.media.metadata.ARTIST");
+        long dur = metaLong(mc, "android.media.metadata.DURATION");
+        if (Util.isEmpty(title)) return;
+
+        final String key = title + "|" + artist + "|" + dur;
+        if (key.equals(sInjectedKey) || sInjecting) return;
+        sInjectedKey = key;
+        sInjecting = true;
+
+        final String fTitle = title;
+        final String fArtist = artist;
+        final long fDur = dur;
+        final Object ctrl = self;
+
+        new Thread(() -> {
+            try {
+                Object ours = LyricSourceProxy.fetchValues(fTitle, fArtist, null, fDur,
+                        null, null, false);
+                if (ours == null) return;
+                if (!LyricSourceProxy.resultHasWords(ours)) {
+                    log(Log.INFO, TAG, "inject: 我们也拿不到逐字 (" + fTitle + ")", null);
+                    return;
+                }
+
+                Runnable apply = () -> {
+                    try {
+                        writeField(ctrl, "mCurrentLyrics", ours);
+                        Method update = findMethod(ctrl, "updateDisplayedLyric");
+                        if (update != null) update.invoke(ctrl);
+                        log(Log.INFO, TAG, "inject: 已换成带逐字的歌词 (" + fTitle + ")", null);
+                    } catch (Throwable t) {
+                        log(Log.WARN, TAG, "inject apply failed", t);
+                    }
+                };
+
+                Object handler = readField(ctrl, "mHandler");
+                if (handler instanceof Handler) {
+                    ((Handler) handler).post(apply);
+                } else {
+                    apply.run();
+                }
+            } catch (Throwable t) {
+                log(Log.WARN, TAG, "inject failed", t);
+            } finally {
+                sInjecting = false;
+            }
+        }, "LyricPatch-inject").start();
+    }
+
+    private static String metaString(Object controller, String metaKey) {
+        try {
+            Method getMd = findMethod(controller, "getMetadata");
+            if (getMd == null) return null;
+            Object md = getMd.invoke(controller);
+            if (md == null) return null;
+            Object v = md.getClass().getMethod("getString", String.class).invoke(md, metaKey);
+            return v instanceof String ? (String) v : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static long metaLong(Object controller, String metaKey) {
+        try {
+            Method getMd = findMethod(controller, "getMetadata");
+            if (getMd == null) return 0L;
+            Object md = getMd.invoke(controller);
+            if (md == null) return 0L;
+            Object v = md.getClass().getMethod("getLong", String.class).invoke(md, metaKey);
+            return v instanceof Number ? ((Number) v).longValue() : 0L;
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    private static Method findMethod(Object target, String name) {
+        for (Class<?> c = target.getClass(); c != null; c = c.getSuperclass()) {
+            try {
+                Method m = c.getDeclaredMethod(name);
+                m.setAccessible(true);
+                return m;
+            } catch (Throwable ignored) {
+                // 继续往父类找
+            }
+        }
+        return null;
     }
 
     /** 日志里只留前 16 个字符，避免刷屏 */

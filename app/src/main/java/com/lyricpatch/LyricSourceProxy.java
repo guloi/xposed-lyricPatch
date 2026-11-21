@@ -120,6 +120,35 @@ public final class LyricSourceProxy implements InvocationHandler {
         return fetch(track, enhanced);
     }
 
+    /**
+     * 给外部（模块）用：不依赖 Track 类，直接按字段取词。
+     * 用于“最终 Lyrics 没逐字”时在控制层直接替换。
+     */
+    public static Object fetchValues(String title, String artist, String album, long durationMs,
+                                    String pkg, String mediaId, boolean enhanced) {
+        try {
+            if (Util.isEmpty(title)) return null;
+            LyricFetcher.Bundle bundle = LyricFetcher.resolve(title, artist, album,
+                    durationMs, pkg, mediaId);
+            if (bundle == null) return null;
+
+            Object lyrics = build(bundle, enhanced);
+            if (lyrics == null) return null;
+
+            String sample = !Util.isEmpty(bundle.lrc) ? bundle.lrc
+                    : (!Util.isEmpty(bundle.yrc) ? bundle.yrc : cueText(lyrics));
+            if (Util.looksChinese(sample)) {
+                lyrics = stripTranslations(lyrics);
+            } else {
+                lyrics = attachTranslations(lyrics, bundle.tlyric);
+            }
+            return lyrics;
+        } catch (Throwable t) {
+            Util.logw("fetchValues failed", t);
+            return null;
+        }
+    }
+
     /** 歌词里是否已经有词级时间（cue.words 非空） */
     private static boolean hasWords(Object lyrics) {
         Object cues = field(lyrics, "mCues");
@@ -146,6 +175,7 @@ public final class LyricSourceProxy implements InvocationHandler {
         public Object invoke(Object proxy, Method method, Object[] args) {
             String name = method.getName();
             Object track = firstArg(args);
+            Util.log("wrap.invoke: " + name);
 
             if ("fetch".equals(name) || "fetchEnhanced".equals(name)) {
                 boolean enhanced = "fetchEnhanced".equals(name);
