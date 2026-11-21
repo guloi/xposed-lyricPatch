@@ -1,4 +1,4 @@
-package com.lyricpatch.ui
+package com.lyricpatch.lib
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import com.lyricpatch.ui.UiPrefs
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -22,9 +23,8 @@ fun <T> bouncy(): SpringSpec<T> = spring(
 /**
  * 每次 key 变化都完整播一遍的“弹一下”，返回缩放系数：1.0 → 1 + amplitude → 1.0。
  *
- * 为什么不直接给值用弹簧：弹簧的过冲量和「剩余距离」成正比。连续点击时值已经贴近目标，
- * 剩下的距离只有几个百分点，过冲就小到看不见。这里把“弹”从值动画里拆出来，
- * 每次点击都从 0 重播一遍正弦钟形，幅度固定，所以再怎么连点手感都一致。
+ * 弹簧的过冲量和「剩余距离」成正比，连点时值已贴近目标，过冲就小到看不见；
+ * 这里把“弹”从值动画里拆出来，每次点击都从 0 重播一遍正弦钟形，幅度固定。
  */
 @Composable
 fun rememberPopScale(key: Any?): Float {
@@ -32,7 +32,6 @@ fun rememberPopScale(key: Any?): Float {
     val anim = remember { Animatable(0f) }
     LaunchedEffect(key) {
         anim.snapTo(0f)
-        // 被打断 / 组合销毁都走这里，不要外抛
         runCatching {
             anim.animateTo(1f, animationSpec = tween(durationMillis = 260))
         }

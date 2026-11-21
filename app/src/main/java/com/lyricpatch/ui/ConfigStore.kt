@@ -2,6 +2,7 @@ package com.lyricpatch.ui
 
 import android.content.Context
 import android.content.Intent
+import com.lyricpatch.lib.ConfKeys
 import android.os.SystemClock
 import kotlinx.coroutines.delay
 import java.io.File
@@ -42,44 +43,45 @@ object ConfigStore {
         return ConfigProvider.lastReportAt >= start
     }
 
-    /** 写回文件时的顺序，和 README 的分组一致 */
+    /** 写回文件时的顺序（键名声明在 ConfKeys） */
     val ORDER = listOf(
-        "providers",
-        "hide_instrumental",
-        "translation", "translation_providers", "machine_translation",
-        "hide_empty_translation", "hide_translation_always", "skip_translation_for_chinese",
-        "parse_word_formats", "kugou_word_timing", "estimate_word_timing",
-        "prefer_network_word_timing", "synth_word_timing", "auto_word_timing",
-        "word_timing_max_chars",
-        "word_scroll", "word_scroll_follow", "word_scroll_start_pct",
-        "word_scroll_speed", "word_scroll_delay",
-        "app_whitelist", "app_blacklist",
-        "log_level", "debug_log",
+        ConfKeys.PROVIDERS,
+        ConfKeys.HIDE_INSTRUMENTAL,
+        ConfKeys.TRANSLATION, ConfKeys.TRANSLATION_PROVIDERS, ConfKeys.MACHINE_TRANSLATION,
+        ConfKeys.HIDE_EMPTY_TRANSLATION, ConfKeys.HIDE_TRANSLATION_ALWAYS,
+        ConfKeys.SKIP_TRANSLATION_FOR_CHINESE,
+        ConfKeys.PARSE_WORD_FORMATS, ConfKeys.KUGOU_WORD_TIMING, ConfKeys.ESTIMATE_WORD_TIMING,
+        ConfKeys.PREFER_NETWORK_WORD_TIMING, ConfKeys.SYNTH_WORD_TIMING,
+        ConfKeys.AUTO_WORD_TIMING, ConfKeys.WORD_TIMING_MAX_CHARS,
+        ConfKeys.WORD_SCROLL, ConfKeys.WORD_SCROLL_FOLLOW, ConfKeys.WORD_SCROLL_START_PCT,
+        ConfKeys.WORD_SCROLL_SPEED, ConfKeys.WORD_SCROLL_DELAY,
+        ConfKeys.APP_WHITELIST, ConfKeys.APP_BLACKLIST,
+        ConfKeys.LOG_LEVEL, ConfKeys.DEBUG_LOG,
     )
 
     /** 和模块代码里的默认值保持一致 */
     val DEFAULTS: Map<String, String> = linkedMapOf(
-        "providers" to "netease,lrclib",
-        "hide_instrumental" to "true",
-        "translation" to "true",
-        "translation_providers" to "netease",
-        "machine_translation" to "auto",
-        "hide_empty_translation" to "true",
-        "hide_translation_always" to "false",
-        "skip_translation_for_chinese" to "true",
-        "parse_word_formats" to "true",
-        "kugou_word_timing" to "true",
-        "estimate_word_timing" to "true",
-        "prefer_network_word_timing" to "false",
-        "synth_word_timing" to "false",
-        "auto_word_timing" to "true",
-        "word_timing_max_chars" to "0",
-        "word_scroll" to "true",
-        "word_scroll_follow" to "true",
-        "word_scroll_start_pct" to "0",
-        "word_scroll_speed" to "0",
-        "word_scroll_delay" to "500",
-        "debug_log" to "false",
+        ConfKeys.PROVIDERS to "netease,lrclib",
+        ConfKeys.HIDE_INSTRUMENTAL to "true",
+        ConfKeys.TRANSLATION to "true",
+        ConfKeys.TRANSLATION_PROVIDERS to "netease",
+        ConfKeys.MACHINE_TRANSLATION to "auto",
+        ConfKeys.HIDE_EMPTY_TRANSLATION to "true",
+        ConfKeys.HIDE_TRANSLATION_ALWAYS to "false",
+        ConfKeys.SKIP_TRANSLATION_FOR_CHINESE to "true",
+        ConfKeys.PARSE_WORD_FORMATS to "true",
+        ConfKeys.KUGOU_WORD_TIMING to "true",
+        ConfKeys.ESTIMATE_WORD_TIMING to "true",
+        ConfKeys.PREFER_NETWORK_WORD_TIMING to "false",
+        ConfKeys.SYNTH_WORD_TIMING to "false",
+        ConfKeys.AUTO_WORD_TIMING to "true",
+        ConfKeys.WORD_TIMING_MAX_CHARS to "0",
+        ConfKeys.WORD_SCROLL to "true",
+        ConfKeys.WORD_SCROLL_FOLLOW to "true",
+        ConfKeys.WORD_SCROLL_START_PCT to "0",
+        ConfKeys.WORD_SCROLL_SPEED to "0",
+        ConfKeys.WORD_SCROLL_DELAY to "500",
+        ConfKeys.DEBUG_LOG to "false",
     )
 
     class LoadResult(val values: Map<String, String>, val path: String)

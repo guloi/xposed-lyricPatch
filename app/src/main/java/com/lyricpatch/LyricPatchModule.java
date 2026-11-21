@@ -1,6 +1,7 @@
 package com.lyricpatch;
 
 import android.content.Context;
+import com.lyricpatch.lib.ConfKeys;
 import android.graphics.Canvas;
 import android.os.Handler;
 import android.util.Log;
@@ -34,7 +35,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.46";
+    private static final String VERSION = "4.51";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -443,7 +444,7 @@ public final class LyricPatchModule extends XposedModule {
                 maybeInjectWordTiming(self);
 
                 // ② 这一行没翻译 & 机翻也没给出来 → 干脆不显示（hide_empty_translation）
-                if (noTranslation && Util.confBool("hide_empty_translation", true)) {
+                if (noTranslation && Util.confBool(ConfKeys.HIDE_EMPTY_TRANSLATION, true)) {
                     clearSubtitle(readField(self, "mOverlayLyricViewHolder"));
                     clearSubtitle(readField(self, "mInlineLyricViewHolder"));
                 }
@@ -463,7 +464,7 @@ public final class LyricPatchModule extends XposedModule {
             }
             if (subtitle != null) {
                 hook(subtitle).intercept(chain -> {
-                    if (!Util.confBool("hide_translation_always", false)) return chain.proceed();
+                    if (!Util.confBool(ConfKeys.HIDE_TRANSLATION_ALWAYS, false)) return chain.proceed();
                     List<?> args = chain.getArgs();
                     if (args == null || args.size() < 2) return chain.proceed();
                     return chain.proceed(new Object[]{args.get(0), null});
@@ -534,7 +535,7 @@ public final class LyricPatchModule extends XposedModule {
      */
     private void maybeInjectWordTiming(Object self) {
         if (self == null) return;
-        if (!Util.confBool("auto_word_timing", true)) return;
+        if (!Util.confBool(ConfKeys.AUTO_WORD_TIMING, true)) return;
 
         Object lyrics = readField(self, "mCurrentLyrics");
         if (lyrics == null || LyricSourceProxy.resultHasWords(lyrics)) return;
@@ -776,7 +777,7 @@ public final class LyricPatchModule extends XposedModule {
         if (Util.confBool("prefer_source_translation", false)) return MODE_SOURCE;
         if (Util.confBool("disable_machine_translation", false)) return MODE_OFF;
 
-        String mode = Util.conf("machine_translation", MODE_AUTO).toLowerCase(Locale.ROOT);
+        String mode = Util.conf(ConfKeys.MACHINE_TRANSLATION, MODE_AUTO).toLowerCase(Locale.ROOT);
         if (MODE_SOURCE.equals(mode)) return MODE_SOURCE;
         if (MODE_OFF.equals(mode)) return MODE_OFF;
         return MODE_AUTO;

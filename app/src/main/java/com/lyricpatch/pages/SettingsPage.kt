@@ -1,7 +1,12 @@
-package com.lyricpatch.ui
+package com.lyricpatch.pages
 
 import android.content.Intent
 import android.net.Uri
+import com.lyricpatch.lib.*
+import com.lyricpatch.ui.AppearanceActivity
+import com.lyricpatch.ui.ConfigStore
+import com.lyricpatch.ui.CrashLogger
+import com.lyricpatch.ui.UiPrefs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -101,7 +106,7 @@ private fun UiState.put(key: String, value: String) {
 private fun UiState.putFlag(key: String, value: Boolean) = put(key, if (value) "true" else "false")
 
 @Composable
-fun SettingsScreen() {
+fun SettingsPage() {
     val state = remember { UiState() }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -268,9 +273,9 @@ fun SettingsScreen() {
             }
             item {
                 PreviewCard(
-                    scrollOn = state.flag("word_scroll"),
-                    speed = state.num("word_scroll_speed", 0),
-                    delayMs = state.num("word_scroll_delay", 500),
+                    scrollOn = state.flag(ConfKeys.WORD_SCROLL),
+                    speed = state.num(ConfKeys.WORD_SCROLL_SPEED, 0),
+                    delayMs = state.num(ConfKeys.WORD_SCROLL_DELAY, 500),
                 )
             }
             item {
@@ -314,17 +319,19 @@ fun SettingsScreen() {
                     SettingsCard {
                     FieldRow(
                         label = "providers",
-                        value = state.raw("providers"),
+                        value = state.raw(ConfKeys.PROVIDERS),
                         supporting = "netease / qq / kugou / lrclib，或 https:// 自建源",
-                        onChange = { state.put("providers", it) },
+                        onChange = { state.put(ConfKeys.PROVIDERS, it) },
                     )
-                    PresetChips(current = state.raw("providers")) { state.put("providers", it) }
+                    PresetChips(current = state.raw(ConfKeys.PROVIDERS)) {
+                        state.put(ConfKeys.PROVIDERS, it)
+                    }
                     RowDivider()
                     SwitchRow(
                         title = "hide_instrumental",
                         subtitle = "识别到纯音乐时不显示歌词",
-                        checked = state.flag("hide_instrumental"),
-                        onCheckedChange = { state.putFlag("hide_instrumental", it) },
+                        checked = state.flag(ConfKeys.HIDE_INSTRUMENTAL),
+                        onCheckedChange = { state.putFlag(ConfKeys.HIDE_INSTRUMENTAL, it) },
                     )
                 }
                     CardNote("「状态栏歌词源」优先，未命中时按上方顺序。")
@@ -345,44 +352,44 @@ fun SettingsScreen() {
                     SwitchRow(
                         title = "translation",
                         subtitle = "关闭后不请求翻译",
-                        checked = state.flag("translation"),
-                        onCheckedChange = { state.putFlag("translation", it) },
+                        checked = state.flag(ConfKeys.TRANSLATION),
+                        onCheckedChange = { state.putFlag(ConfKeys.TRANSLATION, it) },
                     )
                     RowDivider()
                     FieldRow(
                         label = "translation_providers",
-                        value = state.raw("translation_providers"),
+                        value = state.raw(ConfKeys.TRANSLATION_PROVIDERS),
                         supporting = "主源无译文时按此顺序获取：netease / qq / http(s)",
-                        onChange = { state.put("translation_providers", it) },
+                        onChange = { state.put(ConfKeys.TRANSLATION_PROVIDERS, it) },
                     )
                     RowDivider()
                     ChoiceRow(
                         title = "machine_translation",
                         subtitle = "ROM 自带机翻的使用策略",
                         options = MACHINE_MODES,
-                        selected = state.raw("machine_translation"),
-                        onSelect = { state.put("machine_translation", it) },
+                        selected = state.raw(ConfKeys.MACHINE_TRANSLATION),
+                        onSelect = { state.put(ConfKeys.MACHINE_TRANSLATION, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "hide_empty_translation",
                         subtitle = "该行无译文时隐藏副标题",
-                        checked = state.flag("hide_empty_translation"),
-                        onCheckedChange = { state.putFlag("hide_empty_translation", it) },
+                        checked = state.flag(ConfKeys.HIDE_EMPTY_TRANSLATION),
+                        onCheckedChange = { state.putFlag(ConfKeys.HIDE_EMPTY_TRANSLATION, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "skip_translation_for_chinese",
                         subtitle = "中文歌词不请求翻译",
-                        checked = state.flag("skip_translation_for_chinese"),
-                        onCheckedChange = { state.putFlag("skip_translation_for_chinese", it) },
+                        checked = state.flag(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE),
+                        onCheckedChange = { state.putFlag(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "hide_translation_always",
                         subtitle = "隐藏所有译文，仅用于排查",
-                        checked = state.flag("hide_translation_always"),
-                        onCheckedChange = { state.putFlag("hide_translation_always", it) },
+                        checked = state.flag(ConfKeys.HIDE_TRANSLATION_ALWAYS),
+                        onCheckedChange = { state.putFlag(ConfKeys.HIDE_TRANSLATION_ALWAYS, it) },
                     )
                 }
                 }
@@ -402,53 +409,53 @@ fun SettingsScreen() {
                     SwitchRow(
                         title = "parse_word_formats",
                         subtitle = "解析增强 LRC 与 Lyricify Syllable 格式",
-                        checked = state.flag("parse_word_formats"),
-                        onCheckedChange = { state.putFlag("parse_word_formats", it) },
+                        checked = state.flag(ConfKeys.PARSE_WORD_FORMATS),
+                        onCheckedChange = { state.putFlag(ConfKeys.PARSE_WORD_FORMATS, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "kugou_word_timing",
                         subtitle = "缺少逐字时从酷狗获取 KRC 逐字",
-                        checked = state.flag("kugou_word_timing"),
-                        onCheckedChange = { state.putFlag("kugou_word_timing", it) },
+                        checked = state.flag(ConfKeys.KUGOU_WORD_TIMING),
+                        onCheckedChange = { state.putFlag(ConfKeys.KUGOU_WORD_TIMING, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "estimate_word_timing",
                         subtitle = "本地按字符估算逐字时间",
-                        checked = state.flag("estimate_word_timing"),
-                        onCheckedChange = { state.putFlag("estimate_word_timing", it) },
+                        checked = state.flag(ConfKeys.ESTIMATE_WORD_TIMING),
+                        onCheckedChange = { state.putFlag(ConfKeys.ESTIMATE_WORD_TIMING, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "prefer_network_word_timing",
                         subtitle = "优先使用联网逐字，响应变慢",
-                        checked = state.flag("prefer_network_word_timing"),
-                        onCheckedChange = { state.putFlag("prefer_network_word_timing", it) },
+                        checked = state.flag(ConfKeys.PREFER_NETWORK_WORD_TIMING),
+                        onCheckedChange = { state.putFlag(ConfKeys.PREFER_NETWORK_WORD_TIMING, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "synth_word_timing",
                         subtitle = "按行时间轴合成逐字，节奏可能不准",
-                        checked = state.flag("synth_word_timing"),
-                        onCheckedChange = { state.putFlag("synth_word_timing", it) },
+                        checked = state.flag(ConfKeys.SYNTH_WORD_TIMING),
+                        onCheckedChange = { state.putFlag(ConfKeys.SYNTH_WORD_TIMING, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "auto_word_timing",
                         subtitle = "当前歌词缺少逐字时自动补充",
-                        checked = state.flag("auto_word_timing"),
-                        onCheckedChange = { state.putFlag("auto_word_timing", it) },
+                        checked = state.flag(ConfKeys.AUTO_WORD_TIMING),
+                        onCheckedChange = { state.putFlag(ConfKeys.AUTO_WORD_TIMING, it) },
                     )
                     RowDivider()
                     SliderRow(
                         title = "word_timing_max_chars",
                         subtitle = "超过该字数不估算，0 为不限",
-                        value = state.num("word_timing_max_chars", 0),
+                        value = state.num(ConfKeys.WORD_TIMING_MAX_CHARS, 0),
                         range = 0f..40f,
                         steps = 39,
-                        display = state.num("word_timing_max_chars", 0).let { if (it <= 0) "不限" else "$it 字" },
-                        onChange = { state.put("word_timing_max_chars", it.toString()) },
+                        display = state.num(ConfKeys.WORD_TIMING_MAX_CHARS, 0).let { if (it <= 0) "不限" else "$it 字" },
+                        onChange = { state.put(ConfKeys.WORD_TIMING_MAX_CHARS, it.toString()) },
                     )
                 }
                 }
@@ -468,20 +475,20 @@ fun SettingsScreen() {
                     SwitchRow(
                         title = "word_scroll",
                         subtitle = "为逐字模式补充横向滚动",
-                        checked = state.flag("word_scroll"),
-                        onCheckedChange = { state.putFlag("word_scroll", it) },
+                        checked = state.flag(ConfKeys.WORD_SCROLL),
+                        onCheckedChange = { state.putFlag(ConfKeys.WORD_SCROLL, it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "word_scroll_follow",
                         subtitle = "按下方设定的时机跟着滚；关闭则从行首匀速滚动",
-                        checked = state.flag("word_scroll_follow"),
-                        onCheckedChange = { state.putFlag("word_scroll_follow", it) },
+                        checked = state.flag(ConfKeys.WORD_SCROLL_FOLLOW),
+                        onCheckedChange = { state.putFlag(ConfKeys.WORD_SCROLL_FOLLOW, it) },
                     )
                     val startOpen = remember { mutableStateOf(true) }
                     // 只在开启「跟随」时出现；展开收起和全局用同一套弹簧
                     AnimatedVisibility(
-                        visible = state.flag("word_scroll_follow"),
+                        visible = state.flag(ConfKeys.WORD_SCROLL_FOLLOW),
                         enter = expandVertically(animationSpec = bouncy()) +
                             fadeIn(animationSpec = bouncy()),
                         exit = shrinkVertically(animationSpec = bouncy()) +
@@ -500,13 +507,13 @@ fun SettingsScreen() {
                                 SliderRow(
                                     title = "word_scroll_start_pct",
                                     subtitle = "0 为自动（按一屏能装下多少算）",
-                                    value = state.num("word_scroll_start_pct", 0),
+                                    value = state.num(ConfKeys.WORD_SCROLL_START_PCT, 0),
                                     range = 0f..90f,
                                     steps = 17,
-                                    display = state.num("word_scroll_start_pct", 0).let {
+                                    display = state.num(ConfKeys.WORD_SCROLL_START_PCT, 0).let {
                                         if (it <= 0) "自动" else "${it}%"
                                     },
-                                    onChange = { state.put("word_scroll_start_pct", it.toString()) },
+                                    onChange = { state.put(ConfKeys.WORD_SCROLL_START_PCT, it.toString()) },
                                 )
                             }
                         }
@@ -515,14 +522,14 @@ fun SettingsScreen() {
                     SliderRow(
                         title = "word_scroll_speed",
                         subtitle = "0 为自动；其余为 px/10ms",
-                        value = state.num("word_scroll_speed", 0),
+                        value = state.num(ConfKeys.WORD_SCROLL_SPEED, 0),
                         range = 0f..16f,
                         steps = 15,
-                        display = state.num("word_scroll_speed", 0).let { if (it <= 0) "自动" else "${it}px" },
-                        onChange = { state.put("word_scroll_speed", it.toString()) },
+                        display = state.num(ConfKeys.WORD_SCROLL_SPEED, 0).let { if (it <= 0) "自动" else "${it}px" },
+                        onChange = { state.put(ConfKeys.WORD_SCROLL_SPEED, it.toString()) },
                     )
                     RowDivider()
-                    val delayMs = state.num("word_scroll_delay", 500)
+                    val delayMs = state.num(ConfKeys.WORD_SCROLL_DELAY, 500)
                     SliderRow(
                         title = "word_scroll_delay",
                         subtitle = "开始滚动前的停留时间",
@@ -530,7 +537,7 @@ fun SettingsScreen() {
                         range = 0f..20f,
                         steps = 19,
                         display = "${delayMs}ms",
-                        onChange = { state.put("word_scroll_delay", (it * 100).toString()) },
+                        onChange = { state.put(ConfKeys.WORD_SCROLL_DELAY, (it * 100).toString()) },
                     )
                 }
                     CardNote("ROM 的逐字绘制不会滚动，超宽部分会被裁切。开启跟随后先静止，接近右边缘再滚动；关闭则从行首滚动。")
@@ -548,8 +555,8 @@ fun SettingsScreen() {
             item {
                 SectionBody(open("应用过滤")) {
                     SettingsCard {
-                    val white = state.raw("app_whitelist")
-                    val black = state.raw("app_blacklist")
+                    val white = state.raw(ConfKeys.APP_WHITELIST)
+                    val black = state.raw(ConfKeys.APP_BLACKLIST)
                     // 白名单非空时黑名单失效，反之亦然：失效且自身为空的那个置灰；
                     // 自身有内容时仍保持可编辑，否则没法清空
                     FieldRow(
@@ -557,7 +564,7 @@ fun SettingsScreen() {
                         value = white,
                         supporting = "仅对这些包名生效，逗号分隔",
                         enabled = !(black.isNotBlank() && white.isBlank()),
-                        onChange = { state.put("app_whitelist", it) },
+                        onChange = { state.put(ConfKeys.APP_WHITELIST, it) },
                     )
                     RowDivider()
                     FieldRow(
@@ -565,7 +572,7 @@ fun SettingsScreen() {
                         value = black,
                         supporting = "跳过这些包名；白名单非空时无效",
                         enabled = !(white.isNotBlank() && black.isBlank()),
-                        onChange = { state.put("app_blacklist", it) },
+                        onChange = { state.put(ConfKeys.APP_BLACKLIST, it) },
                     )
                 }
                 }
@@ -583,15 +590,15 @@ fun SettingsScreen() {
                 SectionBody(open("调试")) {
                     SettingsCard {
                     // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
-                    val currentLevel = state.raw("log_level").ifBlank {
-                        if (state.flag("debug_log")) "debug" else "info"
+                    val currentLevel = state.raw(ConfKeys.LOG_LEVEL).ifBlank {
+                        if (state.flag(ConfKeys.DEBUG_LOG)) "debug" else "info"
                     }
                     ChoiceRow(
                         title = "log_level",
                         subtitle = "info 仅关键事件；debug 含取词细节；verbose 含每帧",
                         options = LOG_LEVELS,
                         selected = currentLevel,
-                        onSelect = { state.put("log_level", it) },
+                        onSelect = { state.put(ConfKeys.LOG_LEVEL, it) },
                     )
                     RowDivider()
                     InfoRow(
@@ -982,7 +989,8 @@ private fun SaveBar(
 }
 
 /**
- * 可上滑/下滑的保存条：平时只留底部一条细线，上滑沿原路升出，下滑沿原路收回。
+ * 跟随滚动的保存条：列表上滑（手指向上）时从底部升出，下滑时沿原路收回；
+ * 列表滚不动时上下划同样会触发。
  */
 @Composable
 private fun SlideUpSaveBar(

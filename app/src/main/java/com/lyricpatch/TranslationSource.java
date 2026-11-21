@@ -1,5 +1,7 @@
 package com.lyricpatch;
 
+import com.lyricpatch.lib.ConfKeys;
+
 import org.json.JSONObject;
 
 import java.util.ArrayList;
@@ -41,9 +43,9 @@ public final class TranslationSource {
      */
     public static String resolve(String title, String artist, String album, long durationMs,
                                  String pkg, String mediaId, String lrcForAlign) {
-        if (!Util.confBool("translation", true)) return null;
+        if (!Util.confBool(ConfKeys.TRANSLATION, true)) return null;
 
-        String order = Util.conf("translation_providers", "netease");
+        String order = Util.conf(ConfKeys.TRANSLATION_PROVIDERS, "netease");
         if (Util.isEmpty(order)) return null;
 
         for (String raw : order.split(",")) {

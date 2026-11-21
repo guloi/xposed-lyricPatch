@@ -1,6 +1,7 @@
 package com.lyricpatch;
 
 import android.os.SystemClock;
+import com.lyricpatch.lib.ConfKeys;
 import android.view.View;
 import android.widget.TextView;
 
@@ -29,8 +30,10 @@ import java.util.WeakHashMap;
  * 这里不碰 ROM 的任何绘制代码，只在 onDraw 外面套一层 canvas.translate(dx, 0)：
  * ① 画出来的「底字 + 高亮前缀」整体跟着 dx 平移；ROM 内部的 clipRect 是在
  * 平移之后的坐标系里执行的，所以高亮被视口裁得刚刚好，观感和原生跑马灯一致。
- * dx 完全按 ② 的节奏算：延迟 word_scroll_delay（默认 500ms）后每 10ms 走
- * word_scroll_speed（默认取 ROM 的 mScrollSpeed），滚到 textWidth - getWidth() 停住；
+ * dx 的节奏由 word_scroll_* 决定：先等 word_scroll_delay（默认 500ms）；
+ * 跟随模式（word_scroll_follow）下再静止到 word_scroll_start_pct 指定的时机
+ * （0 表示按「一屏能装下多少」自动算），然后把剩下路程铺满到句尾；
+ * word_scroll_speed > 0 时会改成固定 px/10ms。
  * 滚动期间自己 postInvalidateDelayed 维持帧率（ROM 只每 250ms 才刷一次）。
  */
 final class LyricScroll {
@@ -206,11 +209,11 @@ final class LyricScroll {
         long now = SystemClock.uptimeMillis();
         if (sConfAt != 0 && now - sConfAt < 3000L) return;
         sConfAt = now;
-        sConfOn = Util.confBool("word_scroll", true);
-        sConfFollow = Util.confBool("word_scroll_follow", true);
-        sConfStartPct = Math.min(95, Math.max(0, Util.confInt("word_scroll_start_pct", 0)));
-        sConfSpeed = Math.max(0, Util.confInt("word_scroll_speed", 0));
-        sConfDelay = Math.max(0, Util.confInt("word_scroll_delay", 500));
+        sConfOn = Util.confBool(ConfKeys.WORD_SCROLL, true);
+        sConfFollow = Util.confBool(ConfKeys.WORD_SCROLL_FOLLOW, true);
+        sConfStartPct = Math.min(95, Math.max(0, Util.confInt(ConfKeys.WORD_SCROLL_START_PCT, 0)));
+        sConfSpeed = Math.max(0, Util.confInt(ConfKeys.WORD_SCROLL_SPEED, 0));
+        sConfDelay = Math.max(0, Util.confInt(ConfKeys.WORD_SCROLL_DELAY, 500));
     }
 
     private static synchronized boolean resolve(Class<?> type) {

@@ -7,6 +7,8 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.lyricpatch.lib.ConfKeys;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -86,8 +88,8 @@ public final class Util {
         if (sLogLevelAt != 0 && now - sLogLevelAt < 3000L) return sLogLevel;
         sLogLevelAt = now;
 
-        int level = parseLogLevel(conf("log_level", null));
-        if (level < 0) level = confBool("debug_log", false) ? LOG_DEBUG : LOG_INFO;
+        int level = parseLogLevel(conf(ConfKeys.LOG_LEVEL, null));
+        if (level < 0) level = confBool(ConfKeys.DEBUG_LOG, false) ? LOG_DEBUG : LOG_INFO;
         if (level != sLogLevel) {
             sLogLevel = level;
             Log.i(TAG, "log_level -> " + levelName(level));
@@ -227,10 +229,10 @@ public final class Util {
     /** 启用时打一行，排查先看这条就知道现在是哪套配置 */
     static String summary() {
         return "level=" + levelName(logLevel())
-                + " providers=" + conf("providers", "netease,lrclib")
-                + " word_scroll=" + (confBool("word_scroll", true) ? "on" : "off")
-                + " translation=" + (confBool("translation", true) ? "on" : "off")
-                + " whitelist=" + brief(conf("app_whitelist", ""), 32);
+                + " providers=" + conf(ConfKeys.PROVIDERS, "netease,lrclib")
+                + " word_scroll=" + (confBool(ConfKeys.WORD_SCROLL, true) ? "on" : "off")
+                + " translation=" + (confBool(ConfKeys.TRANSLATION, true) ? "on" : "off")
+                + " whitelist=" + brief(conf(ConfKeys.APP_WHITELIST, ""), 32);
     }
 
     /** 截断 + 把换行拍平，logcat 里一行看得完 */
@@ -256,7 +258,7 @@ public final class Util {
         }
     }
 
-    /** 让 hook 顺手把 SystemUI 的 Context 递进来（反射拿不到时的兵底） */
+    /** 让 hook 顺手把 SystemUI 的 Context 递进来（反射拿不到时的兜底） */
     static void setContext(Context ctx) {
         if (ctx != null && sContext == null) sContext = ctx;
     }

@@ -1,5 +1,7 @@
 package com.lyricpatch;
 
+import com.lyricpatch.lib.ConfKeys;
+
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,15 +54,15 @@ public final class LyricFetcher {
 
     public static Bundle resolve(String title, String artist, String album, long durationMs,
                                  String packageName, String mediaId) {
-        boolean withTranslation = Util.confBool("translation", true);
+        boolean withTranslation = Util.confBool(ConfKeys.TRANSLATION, true);
 
         StringBuilder keyBuilder = new StringBuilder();
         keyBuilder.append(title).append('\0').append(artist)
                 .append('\0').append(album).append('\0').append(durationMs)
                 // 配置变了就别复用旧结果（否则刚打开翻译还是会吃到无翻译的旧缓存）
                 .append('\0').append(withTranslation)
-                .append('\0').append(Util.conf("providers", "netease,lrclib"))
-                .append('\0').append(Util.conf("translation_providers", ""))
+                .append('\0').append(Util.conf(ConfKeys.PROVIDERS, "netease,lrclib"))
+                .append('\0').append(Util.conf(ConfKeys.TRANSLATION_PROVIDERS, ""))
                 .append('\0').append(nz(sUpstream));
         String key = keyBuilder.toString();
 
@@ -82,7 +84,7 @@ public final class LyricFetcher {
         // 2) 按 providers 顺序逐个尝试
         if (bundle == null) {
             // 注意：URL 里可能有大小写，只对内置名字做小写化
-            String order = Util.conf("providers", "netease,lrclib");
+            String order = Util.conf(ConfKeys.PROVIDERS, "netease,lrclib");
             if (!Util.isEmpty(sUpstream)) {
                 // 设置里填的 base（通常是音理/lyricon 的本地服务）优先，因为它们可能带 yrc
                 order = sUpstream.replace(';', ',') + "," + order;
@@ -120,7 +122,7 @@ public final class LyricFetcher {
         // yrc 字段非空 ≠ 真逐字：有些源把纯行级歌词塞进 yrc，所以看有没有 (起,长,0) 词标签
         // 增强 LRC / Lyricify Syllable 自带词级时间，识别到就直接转成 yrc（真逐字）
         if (bundle != null && !hasWordTags(bundle.yrc)
-                && Util.confBool("parse_word_formats", true)) {
+                && Util.confBool(ConfKeys.PARSE_WORD_FORMATS, true)) {
             String rawForm = !Util.isEmpty(bundle.lrc) ? bundle.lrc : bundle.yrc;
             WordFormats.Result fmt = WordFormats.convert(rawForm);
             if (fmt != null) {
@@ -135,7 +137,7 @@ public final class LyricFetcher {
         // 语言采样：lrc 为空就用 yrc（网易云对部分歌只回 yrc，逐字歌词全在里面）
         String langSample = null;
         boolean skipTranslation = false;
-        if (bundle != null && Util.confBool("skip_translation_for_chinese", true)) {
+        if (bundle != null && Util.confBool(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE, true)) {
             langSample = Util.isEmpty(bundle.lrc) ? bundle.yrc : bundle.lrc;
             skipTranslation = Util.looksChinese(langSample);
             if (Util.isDebug()) {
@@ -172,7 +174,7 @@ public final class LyricFetcher {
 
         // 还是没有真逐字？去酷狗要（KRC，参考音理的做法：只吃真数据，不算）
         if (bundle != null && !hasYrc && !Util.isEmpty(bundle.lrc)
-                && Util.confBool("kugou_word_timing", true)) {
+                && Util.confBool(ConfKeys.KUGOU_WORD_TIMING, true)) {
             try {
                 LyricFetcher.Bundle kg = Kugou.fetch(title, artist, durationMs);
                 if (kg != null && !Util.isEmpty(kg.yrc)) {
@@ -195,7 +197,7 @@ public final class LyricFetcher {
 
         // 还是没有逐字？用行时间轴合成一份，让状态栏也有卡拉OK动画
         if (bundle != null && !hasWordTags(bundle.yrc) && !Util.isEmpty(bundle.lrc)
-                && Util.confBool("synth_word_timing", false)) {
+                && Util.confBool(ConfKeys.SYNTH_WORD_TIMING, false)) {
             String yrc = WordTiming.synth(bundle.lrc);
             if (yrc != null) {
                 bundle.yrc = yrc;

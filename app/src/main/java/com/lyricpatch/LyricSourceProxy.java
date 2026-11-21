@@ -1,5 +1,7 @@
 package com.lyricpatch;
 
+import com.lyricpatch.lib.ConfKeys;
+
 import org.json.JSONObject;
 
 import java.lang.reflect.Constructor;
@@ -218,7 +220,7 @@ public final class LyricSourceProxy implements InvocationHandler {
                     //  ROM 的逐字自绘本身不带跑马灯，长句会显示不全 ——
                     //  这一点已经由 LyricScroll 在 onDraw 外面补上了，所以这个闸门
                     //  现在只是兼容老配置 / 想让短句才有动画时用，建议留 0。
-                    int maxChars = Util.confInt("word_timing_max_chars", 0);
+                    int maxChars = Util.confInt(ConfKeys.WORD_TIMING_MAX_CHARS, 0);
                     if (maxChars > 0 && chars > maxChars) {
                         out.put(ts, sCueCtor.newInstance(ts, text, tr, words));
                         continue;
@@ -422,7 +424,7 @@ public final class LyricSourceProxy implements InvocationHandler {
 
     /** 开关 + 判定一起：hide_instrumental 开着且确实是纯音乐才藏 */
     public static boolean shouldHideInstrumental(Object lyrics) {
-        return Util.confBool("hide_instrumental", true) && looksInstrumental(lyrics);
+        return Util.confBool(ConfKeys.HIDE_INSTRUMENTAL, true) && looksInstrumental(lyrics);
     }
 
     /** 给 ROM 的“空歌词”：非 null 会短路源链，但一个字都不显示 */

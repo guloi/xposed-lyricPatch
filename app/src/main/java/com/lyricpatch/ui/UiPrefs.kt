@@ -2,6 +2,7 @@ package com.lyricpatch.ui
 
 import android.content.Context
 import androidx.compose.runtime.getValue
+import com.lyricpatch.lib.UiKeys
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
@@ -12,16 +13,16 @@ import androidx.compose.runtime.setValue
 object UiPrefs {
 
     private const val FILE = "ui_prefs"
-    private const val KEY_DYNAMIC = "dynamic_color"
-    private const val KEY_ACCENT = "accent"
-    private const val KEY_COLLAPSE = "collapsible_sections"
-    private const val KEY_FLOATING_BAR = "floating_save_bar"
-    private const val KEY_BOUNCE = "bounce_percent"
-    private const val KEY_COLLAPSE_DEFAULT = "collapse_by_default"
-    private const val KEY_SECTIONS_SEEN = "sections_seen"
 
-    /** 每个大标题的折叠状态存在 section_<标题> 下 */
-    private const val KEY_SECTION_PREFIX = "section_"
+    // 键名统一声明在 com.lyricpatch.lib.UiKeys
+    private const val KEY_DYNAMIC = UiKeys.DYNAMIC_COLOR
+    private const val KEY_ACCENT = UiKeys.ACCENT
+    private const val KEY_COLLAPSE = UiKeys.COLLAPSIBLE
+    private const val KEY_FLOATING_BAR = UiKeys.FLOATING_SAVE_BAR
+    private const val KEY_BOUNCE = UiKeys.BOUNCE
+    private const val KEY_COLLAPSE_DEFAULT = UiKeys.COLLAPSE_BY_DEFAULT
+    private const val KEY_SECTIONS_SEEN = UiKeys.SECTIONS_SEEN
+    private const val KEY_SECTION_PREFIX = UiKeys.SECTION_PREFIX
 
     const val DEFAULT_ACCENT = "#5B4BC6"
 
@@ -32,7 +33,7 @@ object UiPrefs {
     var collapsible by mutableStateOf(true)
         private set
 
-    /** 保存条不常驻：底部上滑呼出，下滑收起 */
+    /** 保存条不常驻：跟随列表上滑显示、下滑隐藏 */
     var floatingSaveBar by mutableStateOf(false)
         private set
 
