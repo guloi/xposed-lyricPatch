@@ -53,7 +53,7 @@ public final class LyricSourceProxy implements InvocationHandler {
                 sourceClass = Class.forName(CLS_SOURCE, false, cl);
                 parserClass = Class.forName(CLS_PARSER, false, cl);
             } catch (Throwable t) {
-                Util.logw("proxy fail @load classes", t);
+                Util.e("proxy fail @load classes", t);
                 return null;
             }
 
@@ -61,7 +61,7 @@ public final class LyricSourceProxy implements InvocationHandler {
                 sParseLyricText = parserClass.getMethod("parseLyricText", String.class);
                 sParseLyrics = parserClass.getMethod("parseLyrics", JSONObject.class);
             } catch (Throwable t) {
-                Util.logw("proxy fail @parser methods", t);
+                Util.e("proxy fail @parser methods", t);
                 return null;
             }
 
@@ -78,7 +78,7 @@ public final class LyricSourceProxy implements InvocationHandler {
             } catch (Throwable t) {
                 sCueCtor = null;
                 sLyricsCtor = null;
-                Util.logw("Cue/Lyrics ctor unavailable, translation rewrite disabled", t);
+                Util.w("Cue/Lyrics 构造器拿不到，翻译重贴关掉", t);
             }
 
             ClassLoader target = sourceClass.getClassLoader();
@@ -88,12 +88,12 @@ public final class LyricSourceProxy implements InvocationHandler {
                 sSource = Proxy.newProxyInstance(target, new Class<?>[]{sourceClass},
                         new LyricSourceProxy());
             } catch (Throwable t) {
-                Util.logw("proxy fail @newProxyInstance", t);
+                Util.e("proxy fail @newProxyInstance", t);
                 return null;
             }
-            Util.log("LyricSource proxy created (rewrite=" + (sCueCtor != null) + ")");
+            Util.i("LyricSource proxy 就绪 (rewrite=" + (sCueCtor != null) + ")");
         } catch (Throwable t) {
-            Util.logw("create LyricSource proxy failed", t);
+            Util.e("create LyricSource proxy failed", t);
         }
         return sSource;
     }
@@ -173,7 +173,7 @@ public final class LyricSourceProxy implements InvocationHandler {
             }
 
             if (matched == 0) return null;
-            Util.log("mergeWords: " + matched + "/" + out.size() + " 行贴上了逐字");
+            Util.d("mergeWords: " + matched + "/" + out.size() + " 行贴上了逐字");
             return sLyricsCtor.newInstance(out, field(lyrics, "mUnsyncedLyrics"));
         } catch (Throwable t) {
             Util.logw("mergeWords failed", t);
@@ -212,7 +212,10 @@ public final class LyricSourceProxy implements InvocationHandler {
                     long lineDur = Math.max(600L, next - ts);
                     int chars = text.codePointCount(0, text.length());
 
-                    // 太长的行就不估：一估 ROM 就走自绘，反而会没跑马灯/显示不全
+                    // 只有超过该字数的行才不估（0 = 不限）。
+                    //  ROM 的逐字自绘本身不带跑马灯，长句会显示不全 ——
+                    //  这一点已经由 LyricScroll 在 onDraw 外面补上了，所以这个闸门
+                    //  现在只是兼容老配置 / 想让短句才有动画时用，建议留 0。
                     int maxChars = Util.confInt("word_timing_max_chars", 0);
                     if (maxChars > 0 && chars > maxChars) {
                         out.put(ts, sCueCtor.newInstance(ts, text, tr, words));
@@ -240,7 +243,7 @@ public final class LyricSourceProxy implements InvocationHandler {
             }
 
             if (made == 0) return lyrics;
-            Util.log("estimateWords: " + made + "/" + out.size() + " 行估算了逐字");
+            Util.d("estimateWords: " + made + "/" + out.size() + " 行估算了逐字");
             return sLyricsCtor.newInstance(out, field(lyrics, "mUnsyncedLyrics"));
         } catch (Throwable t) {
             Util.logw("estimateWords failed", t);
@@ -380,7 +383,10 @@ public final class LyricSourceProxy implements InvocationHandler {
         public Object invoke(Object proxy, Method method, Object[] args) {
             String name = method.getName();
             Object track = firstArg(args);
-            Util.log("wrap.invoke: " + name);
+            // 每次源调用都会进来，只在 verbose 下打，而且同一个方法名 3 秒最多一条
+            if (Util.isVerbose() && Util.allow("wrap.invoke:" + name, 3000L)) {
+                Util.v("wrap.invoke: " + name);
+            }
 
             if ("fetch".equals(name) || "fetchEnhanced".equals(name)) {
                 boolean enhanced = "fetchEnhanced".equals(name);
@@ -395,7 +401,7 @@ public final class LyricSourceProxy implements InvocationHandler {
 
                 Object ours = fetch(track, enhanced);
                 if (ours != null) {
-                    Util.log("wrap(" + name + "): 用我们的逐字结果替换"
+                    Util.d("wrap(" + name + "): 用我们的逐字结果替换"
                             + (original == null ? "（原源 null）" : "（原源无逐字）"));
                     return ours;
                 }
@@ -414,11 +420,11 @@ public final class LyricSourceProxy implements InvocationHandler {
     public Object invoke(Object proxy, Method method, Object[] args) {
         String name = method.getName();
         if ("fetch".equals(name)) {
-            Util.log("proxy.fetch");
+            Util.v("proxy.fetch");
             return fetch(firstArg(args), false);
         }
         if ("fetchEnhanced".equals(name)) {
-            Util.log("proxy.fetchEnhanced");
+            Util.v("proxy.fetchEnhanced");
             return fetch(firstArg(args), true);
         }
         if ("toString".equals(name)) return "LyricPatchSource";
@@ -426,9 +432,11 @@ public final class LyricSourceProxy implements InvocationHandler {
         if ("equals".equals(name)) return proxy == firstArg(args);
 
         // 未知方法：不静默，打出来（以前这里直接 return null，会导致“源看起来在，但从不工作”）
-        Util.log("proxy: unexpected method '" + name + "' "
-                + (method.getReturnType() == null ? "" : method.getReturnType().getSimpleName())
-                + " -> null");
+        if (Util.allow("unexpected:" + name, 60000L)) {
+            Util.w("proxy: unexpected method '" + name + "' "
+                    + (method.getReturnType() == null ? "" : method.getReturnType().getSimpleName())
+                    + " -> null");
+        }
         return null;
     }
 
@@ -449,7 +457,7 @@ public final class LyricSourceProxy implements InvocationHandler {
             long duration = lng(track, "durationMs");
 
             if (Util.isEmpty(title)) {
-                Util.log("skip(no title): pkg=" + pkg + " mediaId=" + mediaId);
+                Util.d("skip(no title): pkg=" + pkg + " mediaId=" + mediaId);
                 return null;
             }
 
@@ -459,25 +467,31 @@ public final class LyricSourceProxy implements InvocationHandler {
                 // null 会让 ROM 继续试内置 Apple/LrcLib 源，那两个源不认识白名单，
                 // 照样会把视频标题当成歌名配上词（白名单就形同虚设）。
                 Object empty = emptyLyrics();
-                Util.log("skip(not whitelisted): pkg=" + pkg + " title=" + title
-                        + " block=" + (empty != null));
+                if (Util.allow("skip-pkg:" + pkg, 60000L)) {
+                    Util.d("skip(not whitelisted): pkg=" + pkg + " title=" + title
+                            + " block=" + (empty != null));
+                }
                 return empty;
             }
-            Util.log((enhanced ? "track(E): " : "track: ")
-                    + "title=" + title + " | artist=" + artist + " | album=" + album
-                    + " | dur=" + duration + " | pkg=" + pkg + " | mediaId=" + mediaId);
+            if (Util.isDebug()) {
+                Util.d((enhanced ? "track(E): " : "track: ")
+                        + "title=" + title + " | artist=" + artist + " | album=" + album
+                        + " | dur=" + duration + " | pkg=" + pkg + " | mediaId=" + mediaId);
+            }
 
             LyricFetcher.Bundle bundle =
                     LyricFetcher.resolve(title, artist, album, duration, pkg, mediaId);
             if (bundle == null) {
-                Util.log((enhanced ? "miss(E): " : "miss: ")
-                        + title + " / " + artist + " dur=" + duration + " pkg=" + pkg);
+                if (Util.isDebug()) {
+                    Util.d((enhanced ? "miss(E): " : "miss: ")
+                            + title + " / " + artist + " dur=" + duration + " pkg=" + pkg);
+                }
                 return null;
             }
 
             Object lyrics = build(bundle, enhanced);
             if (lyrics == null) {
-                Util.log("parse failed: " + title);
+                Util.w("parse failed: " + title);
                 return null;
             }
 
@@ -496,21 +510,23 @@ public final class LyricSourceProxy implements InvocationHandler {
             // 诊断：拿到 tlyric 但解析后一行翻译都没贴上，就是时间轴对不上
             int cues = cueCount(lyrics);
             int translated = translatedCount(lyrics);
-            Util.log((enhanced ? "parsed(E): " : "parsed: ") + title
-                    + " cues=" + cues + " translated=" + translated
-                    + " (bundle tl=" + len(bundle.tlyric) + ")");
+            if (Util.isDebug()) {
+                Util.d((enhanced ? "parsed(E): " : "parsed: ") + title
+                        + " cues=" + cues + " translated=" + translated
+                        + " (bundle tl=" + len(bundle.tlyric) + ")");
+            }
             if (translated == 0 && len(bundle.tlyric) > 0) {
-                Util.log("WARN: tlyric 拿到了，但解析后一行翻译都没贴上（findClosestLine 限制 1s）");
+                Util.w("tlyric 拿到了但一行都没贴上（±1s 内对不上）: " + title);
             }
             if (!enhanced) {
-                Util.log("hit: " + title + " / " + artist
+                Util.i("hit: " + title + " / " + artist
                         + " lrc=" + len(bundle.lrc)
                         + " yrc=" + len(bundle.yrc)
                         + " tl=" + len(bundle.tlyric));
             }
             // 逐字轮没有 word timing 就返回 null，让 ROM 走行级那一轮
             if (enhanced && !hasWordTiming(lyrics)) {
-                Util.log("enhanced: 无逐字，回退行级 (bundle yrc="
+                Util.d("enhanced: 无逐字，回退行级 (bundle yrc="
                         + (bundle.yrc == null ? 0 : bundle.yrc.length()) + ")");
                 return null;
             }
@@ -588,7 +604,7 @@ public final class LyricSourceProxy implements InvocationHandler {
 
             if (!any) return lyrics;   // 本来就没翻译，不用重建
 
-            Util.log("中文歌词，抹掉 " + out.size() + " 行的翻译");
+            Util.d("中文歌词，抹掉 " + out.size() + " 行的翻译");
             return sLyricsCtor.newInstance(out, field(lyrics, "mUnsyncedLyrics"));
         } catch (Throwable t) {
             Util.logw("strip translations failed", t);
@@ -652,15 +668,15 @@ public final class LyricSourceProxy implements InvocationHandler {
                             readString(cue, "text"), tlTexts.get(i), readList(cue, "words")));
                 }
                 matched = cues.size();
-                Util.log("attach: index fallback " + matched + " lines");
+                Util.d("attach: index fallback " + matched + " lines");
             }
 
             if (matched == 0 && existing == 0) {
-                Util.log("attach: 0/" + cues.size() + " 未能在 ±" + MATCH_WINDOW_MS + "ms 内对上");
+                Util.w("attach: 0/" + cues.size() + " 未能在 ±" + MATCH_WINDOW_MS + "ms 内对上");
                 return lyrics;
             }
 
-            Util.log("attach: matched=" + matched + " existing=" + existing
+            Util.d("attach: matched=" + matched + " existing=" + existing
                     + " total=" + cues.size());
 
             TreeMap<Long, Object> out = new TreeMap<>();

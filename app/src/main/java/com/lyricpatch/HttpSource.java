@@ -41,10 +41,10 @@ public final class HttpSource {
             if (withTranslation) b.tlyric = pick(o, "tlyric", "translation", "translated");
 
             if (b.empty()) {
-                Util.log("http source miss: " + base);
+                Util.d("http source miss: " + base);
                 return null;
             }
-            Util.log("http source hit: " + base + " lrc=" + len(b.lrc) + " yrc=" + len(b.yrc));
+            Util.i("http source hit: " + base + " lrc=" + len(b.lrc) + " yrc=" + len(b.yrc));
             return b;
         } catch (Throwable t) {
             Util.logw("http source failed: " + baseUrl, t);

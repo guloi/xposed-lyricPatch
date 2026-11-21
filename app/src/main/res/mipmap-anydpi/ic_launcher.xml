@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API < 26 的兵底图标（本项目 minSdk 29，正常不会用到，只是不给 AAPT 报“缺默认配置”） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#5B4BC6"
+        android:pathData="M18,0h72a18,18 0 0 1 18,18v72a18,18 0 0 1 -18,18h-72a18,18 0 0 1 -18,-18v-72a18,18 0 0 1 18,-18z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.92"
+        android:pathData="M33,34h42a5,5 0 0 1 0,10h-42a5,5 0 0 1 0,-10z" />
+    <path
+        android:fillColor="#A9F5EA"
+        android:pathData="M33,50h26a5,5 0 0 1 0,10h-26a5,5 0 0 1 0,-10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.92"
+        android:pathData="M33,66h34a5,5 0 0 1 0,10h-34a5,5 0 0 1 0,-10z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.55"
+        android:pathData="M74,66h10a5,5 0 0 1 0,10h-10a5,5 0 0 1 0,-10z" />
+</vector>

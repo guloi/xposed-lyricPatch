@@ -86,7 +86,7 @@ public final class LyricFetcher {
             if (!Util.isEmpty(sUpstream)) {
                 // 设置里填的 base（通常是音理/lyricon 的本地服务）优先，因为它们可能带 yrc
                 order = sUpstream.replace(';', ',') + "," + order;
-                Util.log("upstream first: " + sUpstream);
+                Util.d("upstream first: " + sUpstream);
             }
             for (String raw : order.split(",")) {
                 String provider = raw.trim();
@@ -105,7 +105,7 @@ public final class LyricFetcher {
                         bundle = HttpSource.fetch(provider, title, artist, album, durationMs,
                                 packageName, mediaId, withTranslation);
                     } else {
-                        Util.log("unknown provider: " + provider);
+                        Util.w("unknown provider: " + provider);
                     }
                 } catch (Throwable t) {
                     Util.logw("provider " + provider + " failed", t);
@@ -126,7 +126,7 @@ public final class LyricFetcher {
             if (fmt != null) {
                 bundle.lrc = fmt.lrc;
                 bundle.yrc = fmt.yrc;
-                Util.log("word format -> yrc: " + title);
+                Util.d("word format -> yrc: " + title);
             }
         }
 
@@ -138,15 +138,15 @@ public final class LyricFetcher {
         if (bundle != null && Util.confBool("skip_translation_for_chinese", true)) {
             langSample = Util.isEmpty(bundle.lrc) ? bundle.yrc : bundle.lrc;
             skipTranslation = Util.looksChinese(langSample);
-            if (Util.confBool("debug_log", false)) {
-                Util.log("lang: chinese=" + skipTranslation + " sample="
+            if (Util.isDebug()) {
+                Util.d("lang: chinese=" + skipTranslation + " sample="
                         + (langSample == null ? "null" : langSample.length())
                         + " (lrc=" + (bundle.lrc == null ? 0 : bundle.lrc.length())
                         + " yrc=" + (bundle.yrc == null ? 0 : bundle.yrc.length()) + ")");
             }
         }
         if (skipTranslation && !Util.isEmpty(bundle.tlyric)) {
-            Util.log("中文歌词，丢弃源自带 tlyric: " + title);
+            Util.d("中文歌词，丢弃源自带 tlyric: " + title);
             bundle.tlyric = null;
         }
 
@@ -166,7 +166,7 @@ public final class LyricFetcher {
 
         // 诊断：已经有真逐字就直接说一声
         if (hasYrc) {
-            Util.log("already has word timing: " + bundle.yrc.length() + " chars, cues≈"
+            Util.d("already has word timing: " + bundle.yrc.length() + " chars, cues≈"
                     + lines(bundle.yrc));
         }
 
@@ -183,9 +183,9 @@ public final class LyricFetcher {
                             && theirs >= mine * 0.85 && theirs <= mine * 1.15) {
                         bundle.yrc = kg.yrc;
                         if (Util.isEmpty(bundle.lrc) && !Util.isEmpty(kg.lrc)) bundle.lrc = kg.lrc;
-                        Util.log("kugou word timing: " + title + " lines=" + theirs);
+                        Util.d("kugou word timing: " + title + " lines=" + theirs);
                     } else {
-                        Util.log("kugou word timing 行数不符，放弃: " + their(mine, theirs));
+                        Util.d("kugou word timing 行数不符，放弃: " + their(mine, theirs));
                     }
                 }
             } catch (Throwable t) {
@@ -199,7 +199,7 @@ public final class LyricFetcher {
             String yrc = WordTiming.synth(bundle.lrc);
             if (yrc != null) {
                 bundle.yrc = yrc;
-                Util.log("synth word timing: " + title);
+                Util.d("synth word timing: " + title);
             }
         }
 
@@ -219,21 +219,21 @@ public final class LyricFetcher {
             Util.logw("netease wordTimingOnly failed", t);
         }
         if (!Util.isEmpty(yrc) && hasWordTags(yrc)) {
-            Util.log("wordTimingOnly: netease 命中 " + title + " (" + yrc.length() + " chars)");
+            Util.d("wordTimingOnly: netease 命中 " + title + " (" + yrc.length() + " chars)");
             return yrc;
         }
 
         try {
             LyricFetcher.Bundle kg = Kugou.fetch(title, artist, durationMs);
             if (kg != null && hasWordTags(kg.yrc)) {
-                Util.log("wordTimingOnly: kugou 命中 " + title);
+                Util.d("wordTimingOnly: kugou 命中 " + title);
                 return kg.yrc;
             }
         } catch (Throwable t) {
             Util.logw("kugou wordTimingOnly failed", t);
         }
 
-        Util.log("wordTimingOnly: 未命中 " + title + " / " + artist);
+        Util.d("wordTimingOnly: 未命中 " + title + " / " + artist);
         return null;
     }
 

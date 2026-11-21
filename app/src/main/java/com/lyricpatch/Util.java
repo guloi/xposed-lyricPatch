@@ -1,5 +1,6 @@
 package com.lyricpatch;
 
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
@@ -10,7 +11,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** 网络 / 字符串归一化 / 配置 工具类 */
 public final class Util {
@@ -34,18 +37,186 @@ public final class Util {
     private Util() {
     }
 
-    static void log(String msg) {
-        try {
-            Log.i(TAG, msg);
-        } catch (Throwable ignored) {
+    // ───────────────────────────── 日志 ─────────────────────────────
+
+    /** 日志级别，数值和 android.util.Log 一致，0 = 静默 */
+    static final int LOG_SILENT = 0;
+    static final int LOG_ERROR = 1;
+    static final int LOG_WARN = 2;
+    static final int LOG_INFO = 3;
+    static final int LOG_DEBUG = 4;
+    static final int LOG_VERBOSE = 5;
+
+    private static volatile int sLogLevel = LOG_INFO;
+    private static long sLogLevelAt;
+    private static boolean sLogBusy;
+    private static final Map<String, Long> RATE_LIMIT = new ConcurrentHashMap<>();
+
+    /**
+     * 当前级别。配置是热读的，但每帧都去 stat 一遍文件太亏，所以 3 秒才看一眼。
+     * log_level 不写时退回老开关：debug_log=true 等价于 debug。
+     */
+    static int logLevel() {
+        long now = SystemClock.uptimeMillis();
+        if (sLogLevelAt != 0 && now - sLogLevelAt < 3000L) return sLogLevel;
+        sLogLevelAt = now;
+
+        int level = parseLogLevel(conf("log_level", null));
+        if (level < 0) level = confBool("debug_log", false) ? LOG_DEBUG : LOG_INFO;
+        if (level != sLogLevel) {
+            sLogLevel = level;
+            Log.i(TAG, "log_level -> " + levelName(level));
+        }
+        return level;
+    }
+
+    private static int parseLogLevel(String v) {
+        if (v == null) return -1;
+        switch (v.trim().toLowerCase(Locale.ROOT)) {
+            case "s": case "silent": case "off": case "none": case "0":
+                return LOG_SILENT;
+            case "e": case "error": case "1":
+                return LOG_ERROR;
+            case "w": case "warn": case "warning": case "2":
+                return LOG_WARN;
+            case "i": case "info": case "3":
+                return LOG_INFO;
+            case "d": case "debug": case "4":
+                return LOG_DEBUG;
+            case "v": case "verbose": case "all": case "5":
+                return LOG_VERBOSE;
+            default:
+                return -1;
         }
     }
 
-    static void logw(String msg, Throwable t) {
-        try {
-            Log.w(TAG, msg, t);
-        } catch (Throwable ignored) {
+    static String levelName(int level) {
+        switch (level) {
+            case LOG_SILENT: return "silent";
+            case LOG_ERROR: return "error";
+            case LOG_WARN: return "warn";
+            case LOG_DEBUG: return "debug";
+            case LOG_VERBOSE: return "verbose";
+            default: return "info";
         }
+    }
+
+    /** 字符串拼接有代价：这种级别的日志记得先用它挡一下 */
+    static boolean isDebug() {
+        return logLevel() >= LOG_DEBUG;
+    }
+
+    static boolean isVerbose() {
+        return logLevel() >= LOG_VERBOSE;
+    }
+
+    /** 高频路径（每次取词 / 每帧重绘）用它节流，顺便当去重：同 key 窗口内只放行一次 */
+    static boolean allow(String key, long windowMs) {
+        long now = SystemClock.uptimeMillis();
+        Long last = RATE_LIMIT.get(key);
+        if (last != null && now - last < windowMs) return false;
+        if (RATE_LIMIT.size() > 128) RATE_LIMIT.clear();
+        RATE_LIMIT.put(key, now);
+        return true;
+    }
+
+    static void v(String msg) {
+        write(LOG_VERBOSE, msg, null);
+    }
+
+    static void d(String msg) {
+        write(LOG_DEBUG, msg, null);
+    }
+
+    static void i(String msg) {
+        write(LOG_INFO, msg, null);
+    }
+
+    static void w(String msg) {
+        write(LOG_WARN, msg, null);
+    }
+
+    static void w(String msg, Throwable t) {
+        write(LOG_WARN, msg, t);
+    }
+
+    static void e(String msg) {
+        write(LOG_ERROR, msg, null);
+    }
+
+    static void e(String msg, Throwable t) {
+        write(LOG_ERROR, msg, t);
+    }
+
+    /** 老调用点兼容：以前的 log() 算 debug，logw() 算 warn */
+    static void log(String msg) {
+        write(LOG_DEBUG, msg, null);
+    }
+
+    static void logw(String msg, Throwable t) {
+        write(LOG_WARN, msg, t);
+    }
+
+    private static void write(int level, String msg, Throwable t) {
+        // 配置读失败时 conf() 会反过来打日志 → 这里必须防递归
+        if (sLogBusy) return;
+        sLogBusy = true;
+        try {
+            if (level > logLevel()) return;
+            switch (level) {
+                case LOG_VERBOSE:
+                    Log.v(TAG, nz(msg));
+                    break;
+                case LOG_DEBUG:
+                    Log.d(TAG, nz(msg));
+                    break;
+                case LOG_WARN:
+                    Log.w(TAG, withCause(msg, t), stackOf(t));
+                    break;
+                case LOG_ERROR:
+                    Log.e(TAG, withCause(msg, t), stackOf(t));
+                    break;
+                default:
+                    Log.i(TAG, nz(msg));
+                    break;
+            }
+        } catch (Throwable ignored) {
+            // 日志不能把业务流程搞挂
+        } finally {
+            sLogBusy = false;
+        }
+    }
+
+    /** 默认级别只留一行摘要，debug 级别才把整个堆栈丢给 logcat */
+    private static String withCause(String msg, Throwable t) {
+        if (t == null || sLogLevel >= LOG_DEBUG) return nz(msg);
+        String cause = t.getClass().getSimpleName()
+                + (t.getMessage() == null ? "" : ": " + brief(t.getMessage(), 120));
+        return nz(msg) + " (" + cause + ")";
+    }
+
+    private static Throwable stackOf(Throwable t) {
+        return t != null && sLogLevel >= LOG_DEBUG ? t : null;
+    }
+
+    /** 启用时打一行，排查先看这条就知道现在是哪套配置 */
+    static String summary() {
+        return "level=" + levelName(logLevel())
+                + " providers=" + conf("providers", "netease,lrclib")
+                + " word_scroll=" + (confBool("word_scroll", true) ? "on" : "off")
+                + " translation=" + (confBool("translation", true) ? "on" : "off")
+                + " whitelist=" + brief(conf("app_whitelist", ""), 32);
+    }
+
+    /** 截断 + 把换行拍平，logcat 里一行看得完 */
+    static String brief(String s, int max) {
+        if (s == null) return "";
+        String flat = s.replace('\n', ' ').replace('\r', ' ');
+        return flat.length() <= max ? flat : flat.substring(0, max) + "…";
+    }
+
+    private static String nz(String s) {
+        return s == null ? "" : s;
     }
 
     static boolean isEmpty(String s) {

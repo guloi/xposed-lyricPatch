@@ -57,7 +57,7 @@ public final class Netease {
             merge(b, fetchLyric(LYRIC_PC, id, withTranslation), withTranslation, "lyric?os=pc");
         }
         if (Util.isEmpty(b.yrc)) {
-            Util.log("netease 无逐字歌词: id=" + id);
+            Util.d("netease 无逐字歌词: id=" + id);
         }
         return b;
     }
@@ -68,7 +68,7 @@ public final class Netease {
 
         if (Util.isEmpty(b.yrc) && !Util.isEmpty(extra.yrc)) {
             b.yrc = extra.yrc;
-            Util.log("netease " + from + " gave word timing: id, lines=" + countLines(extra.yrc));
+            Util.d("netease " + from + " gave word timing: id, lines=" + countLines(extra.yrc));
         }
         if (Util.isEmpty(b.lrc) && !Util.isEmpty(extra.lrc)) b.lrc = extra.lrc;
         if (withTranslation && Util.isEmpty(b.tlyric) && !Util.isEmpty(extra.tlyric)) {
@@ -119,7 +119,7 @@ public final class Netease {
                     JSONObject s = arr.optJSONObject(0);
                     String name = s == null ? "" : s.optString("name", "");
                     if (Util.similarity(Util.norm(title), Util.norm(name)) < 0.5) {
-                        Util.log("id " + id + " mismatch [" + name + "] vs [" + title + "], skip");
+                        Util.d("id " + id + " mismatch [" + name + "] vs [" + title + "], skip");
                         return null;
                     }
                 }
@@ -163,7 +163,7 @@ public final class Netease {
             LyricFetcher.Bundle bundle = enrich(id, parseLyric(lyric, withTranslation),
                     withTranslation);
             if (bundle != null) {
-                Util.log("netease hit \"" + title + " / " + artist + "\" -> id=" + id);
+                Util.i("netease hit \"" + title + " / " + artist + "\" -> id=" + id);
             }
             return bundle;
         } catch (Throwable t) {
@@ -267,7 +267,7 @@ public final class Netease {
 
                 String tl = tlyricById(id);
                 if (!Util.isEmpty(tl)) {
-                    Util.log("netease tlyric ok -> id=" + id + " lines=" + tl.length());
+                    Util.d("netease tlyric ok -> id=" + id + " lines=" + tl.length());
                     return tl;
                 }
             }

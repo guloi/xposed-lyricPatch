@@ -1,5 +1,6 @@
 package com.lyricpatch;
 
+import android.graphics.Canvas;
 import android.os.Handler;
 import android.util.Log;
 import android.view.View;
@@ -21,6 +22,7 @@ import io.github.libxposed.api.XposedModuleInterface;
  * libxposed API 102 入口。
  * 1) hook SystemUI 的 LyricSourceFactory#create(String)，往源列表里插入自己的 LyricSource。
  * 2) hook LyricViewController#stopLyric()，顺手清掉上一首残留的翻译副标题（见 hookStopLyric）。
+ * 3) hook LyricTextView#onDraw()，补上逐字模式缺的跑马灯，修长句被裁掉（见 hookWordScroll）。
  *
  * 冗余设计（都不依赖编译期 API 声明）：
  *  - classloader 用反射从 param 上取（不同框架版本方法名不一样）
@@ -31,7 +33,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.11";
+    private static final String VERSION = "4.15";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -42,6 +44,10 @@ public final class LyricPatchModule extends XposedModule {
     /** ROM 的「显示翻译」：设备端模型 / 联网机翻，优先级高于源里自带的 tlyric */
     private static final String CLS_TRANSLATOR =
             "com.android.systemui.statusbar.phone.LyricTranslator";
+
+    /** 状态栏歌词的那个自绘 TextView（跑马灯 + 逐字高亮都在它的 onDraw 里） */
+    private static final String CLS_LYRIC_TEXT_VIEW =
+            "com.android.systemui.util.LyricTextView";
 
     private static final String[] LOADER_GETTERS = {
             "getClassLoader",
@@ -111,8 +117,10 @@ public final class LyricPatchModule extends XposedModule {
                 if (src != null) out.add(0, src);
 
                 // 每次 create 都打一条：能直接看出“源到底插进去没”和“设置里填了什么”
-                log(Log.INFO, TAG, "create: setting='" + brief(setting)
-                        + "' proxy=" + (src != null) + " total=" + out.size(), null);
+                if (Util.isDebug()) {
+                    log(Log.DEBUG, TAG, "create: setting='" + brief(setting)
+                            + "' proxy=" + (src != null) + " total=" + out.size(), null);
+                }
 
                 return out;
             });
@@ -123,6 +131,10 @@ public final class LyricPatchModule extends XposedModule {
             hookStopLyric(cl);
             hookHolderText(cl);
             hookTranslator(cl);
+            hookWordScroll(cl);
+
+            // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
+            log(Log.INFO, TAG, "ready: " + Util.summary(), null);
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
         }
@@ -158,9 +170,11 @@ public final class LyricPatchModule extends XposedModule {
                         Object track = args != null && !args.isEmpty() ? args.get(0) : null;
                         Object ours = LyricSourceProxy.fetchFor(track, enhanced);
                         if (ours != null) {
-                            log(Log.INFO, TAG, "source(" + type.getSimpleName() + ")"
-                                    + (enhanced ? "#fetchEnhanced" : "#fetch")
-                                    + ": 无逐字，用我们的结果替换", null);
+                            if (Util.isDebug()) {
+                                log(Log.DEBUG, TAG, "source(" + type.getSimpleName() + ")"
+                                        + (enhanced ? "#fetchEnhanced" : "#fetch")
+                                        + ": 无逐字，用我们的结果替换", null);
+                            }
                             return ours;
                         }
                         return result;
@@ -171,6 +185,68 @@ public final class LyricPatchModule extends XposedModule {
             } catch (Throwable t) {
                 log(Log.WARN, TAG, "hook source failed: " + name, t);
             }
+        }
+    }
+
+    /**
+     * 修另一个 ROM 显示 bug：逐字（word timing）模式下的长句不会滚，右边一截直接被裁掉。
+     *
+     * LyricTextView#onDraw 分两条路：有 mWordTiming 就走卡拉OK 自绘（固定 x 画「底字 45%
+     * 透明度 + 已唱前缀高亮」），没逐字才走 ROM 自己的跑马灯（mOffset 每帧减 mScrollSpeed）。
+     * 而 LyricViewController#setWordTiming 每 250ms 刷新一次都会把 mStopped 置 true 并移掉
+     * mStartScrollRunnable，所以逐字模式下永远没有滚动。
+     *
+     * 这里不去改它的绘制：只在 onDraw 外套一层 canvas.translate(dx, 0)，让自绘的
+     * 「底字 + 高亮前缀」整体平移；dx 由 {@link LyricScroll} 按 ROM 跑马灯的节奏算出来，
+     * 滚动期间自己排重绘（ROM 只每 250ms 刷一次，不自驱会很卡）。
+     */
+    private void hookWordScroll(ClassLoader cl) {
+        try {
+            Class<?> type = Class.forName(CLS_LYRIC_TEXT_VIEW, false, cl);
+            Method onDraw = type.getDeclaredMethod("onDraw", Canvas.class);
+
+            hook(onDraw).intercept(chain -> {
+                List<?> args = chain.getArgs();
+                Object self = chain.getThisObject();
+                if (!(self instanceof View)) return chain.proceed();
+                if (args == null || args.isEmpty() || !(args.get(0) instanceof Canvas)) {
+                    return chain.proceed();
+                }
+
+                View view = (View) self;
+                Canvas canvas = (Canvas) args.get(0);
+
+                // 这里在 onDraw 里跑，出任何岔子都不能拖累 SystemUI 绘制
+                LyricScroll.Scroll scroll;
+                try {
+                    scroll = LyricScroll.prepare(view);
+                } catch (Throwable ignored) {
+                    scroll = null;
+                }
+                if (scroll == null) return chain.proceed();   // 短句/无逐字：ROM 原生逻辑
+
+                Object result = null;
+                if (scroll.dx == 0f) {
+                    result = chain.proceed();
+                } else {
+                    canvas.save();
+                    canvas.translate(scroll.dx, 0f);
+                    try {
+                        result = chain.proceed();
+                    } finally {
+                        canvas.restore();
+                    }
+                }
+
+                if (scroll.delayMs > 0) {
+                    view.postInvalidateDelayed(scroll.delayMs);
+                }
+                return result;
+            });
+
+            log(Log.INFO, TAG, "hooked " + CLS_LYRIC_TEXT_VIEW + "#onDraw (长句滚动)", null);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "hook LyricTextView failed", t);
         }
     }
 
@@ -232,8 +308,8 @@ public final class LyricPatchModule extends XposedModule {
             ts.setVisibility(View.GONE);
 
             // 只在意「真的擦掉了东西」的时候打日志，平时不吵
-            if (!Util.isEmpty(before)) {
-                log(Log.INFO, TAG, "cleared subtitle: '" + brief(before) + "'", null);
+            if (!Util.isEmpty(before) && Util.isDebug()) {
+                log(Log.DEBUG, TAG, "cleared subtitle: '" + brief(before) + "'", null);
             }
         } catch (Throwable t) {
             log(Log.WARN, TAG, "clear subtitle failed", t);
@@ -334,8 +410,8 @@ public final class LyricPatchModule extends XposedModule {
                 boolean noTranslation = translated == null
                         || translated.toString().trim().isEmpty();
 
-                if (Util.confBool("debug_log", false)) {
-                    log(Log.INFO, TAG, "holder: lyric=" + brief(text)
+                if (Util.isDebug()) {
+                    log(Log.DEBUG, TAG, "holder: lyric=" + brief(text)
                             + " | tl=" + brief(translated), null);
                 }
 
@@ -346,7 +422,7 @@ public final class LyricPatchModule extends XposedModule {
 
                 Object result = chain.proceed();
 
-                if (Util.confBool("debug_log", false)) {
+                if (Util.isDebug()) {
                     maybeDumpContainer(self);
                 }
 
@@ -408,7 +484,7 @@ public final class LyricPatchModule extends XposedModule {
         }
         StringBuilder sb = new StringBuilder();
         dumpView((View) container, sb, 0, 4);
-        log(Log.INFO, TAG, "tree(" + tag + "):" + sb, null);
+        log(Log.DEBUG, TAG, "tree(" + tag + "):" + sb, null);
     }
 
     private void dumpView(View v, StringBuilder sb, int depth, int maxDepth) {
@@ -456,8 +532,8 @@ public final class LyricPatchModule extends XposedModule {
         // 白名单：只给指定 App 注入（避免把 B 站视频标题当歌名）
         String pkg = callString(mc, "getPackageName");
         if (!Util.pkgAllowed(pkg)) {
-            if (Util.confBool("debug_log", false)) {
-                log(Log.INFO, TAG, "inject 跳过（不在白名单）: pkg=" + pkg, null);
+            if (Util.isDebug()) {
+                log(Log.DEBUG, TAG, "inject 跳过（不在白名单）: pkg=" + pkg, null);
             }
             return;
         }
@@ -491,7 +567,7 @@ public final class LyricPatchModule extends XposedModule {
                 if (Util.confBool("estimate_word_timing", true)) {
                     target = LyricSourceProxy.estimateWords(base);
                     if (target != null) {
-                        log(Log.INFO, TAG, "inject: 估算逐字（本地即时） (" + fTitle + ")", null);
+                        log(Log.DEBUG, TAG, "inject: 估算逐字（本地即时） (" + fTitle + ")", null);
                     }
                 }
 
@@ -506,7 +582,7 @@ public final class LyricPatchModule extends XposedModule {
 
                 if (target == null) {
                     // 不记 key，下一行刷新会（限速 1.5s 后）再试一次
-                    log(Log.INFO, TAG, "inject: 暂时没有逐字，稍后重试 (" + fTitle + ")", null);
+                    log(Log.DEBUG, TAG, "inject: 暂时没有逐字，稍后重试 (" + fTitle + ")", null);
                     return;
                 }
 
@@ -651,7 +727,7 @@ public final class LyricPatchModule extends XposedModule {
 
                 if (MODE_OFF.equals(mode)) {
                     // 彻底不机翻：源里没翻译就是没翻译
-                    log(Log.INFO, TAG, "machine translation off, sourceTranslations="
+                    log(Log.DEBUG, TAG, "machine translation off, sourceTranslations="
                             + n + "/" + total, null);
                     return lyrics;
                 }
@@ -660,14 +736,14 @@ public final class LyricPatchModule extends XposedModule {
                 if (n > 0) {
                     int need = Math.max(1, (total + 2) / 3);   // 至少盖住 1/3 才值得跳机翻
                     if (n >= need) {
-                        log(Log.INFO, TAG, "use source translation, skip machine translation: "
+                        log(Log.DEBUG, TAG, "use source translation, skip machine translation: "
                                 + n + "/" + total, null);
                         return lyrics;
                     }
-                    log(Log.INFO, TAG, "source translation too sparse (" + n + "/" + total
+                    log(Log.DEBUG, TAG, "source translation too sparse (" + n + "/" + total
                             + "), fallback to machine translation", null);
                 }
-                log(Log.INFO, TAG, "no source translation, fallback to machine translation", null);
+                log(Log.DEBUG, TAG, "no source translation, fallback to machine translation", null);
                 return chain.proceed();
             });
 

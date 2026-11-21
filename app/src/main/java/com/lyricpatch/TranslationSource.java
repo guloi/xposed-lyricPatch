@@ -57,14 +57,14 @@ public final class TranslationSource {
                 String aligned = align(lrcForAlign, rawTl);
                 if (Util.isEmpty(aligned)) continue;
 
-                Util.log("tlyric hit(" + provider + "): " + title + " lines=" + lines(aligned));
+                Util.i("tlyric hit(" + provider + "): " + title + " lines=" + lines(aligned));
                 return aligned;
             } catch (Throwable t) {
                 Util.logw("tlyric " + provider + " failed", t);
             }
         }
 
-        Util.log("tlyric miss: " + title + " / " + artist);
+        Util.d("tlyric miss: " + title + " / " + artist);
         return null;
     }
 
@@ -79,7 +79,7 @@ public final class TranslationSource {
         if (provider.startsWith("http://") || provider.startsWith("https://")) {
             return http(provider, title, artist, album, durationMs, pkg, mediaId);
         }
-        Util.log("unknown translation provider: " + provider);
+        Util.w("unknown translation provider: " + provider);
         return null;
     }
 
@@ -157,7 +157,7 @@ public final class TranslationSource {
 
         if (out.length() == 0) {
             // 一行都没对上：宁可原样交回去让 ROM 自己找最近行，也不要直接丢
-            Util.log("tlyric align failed, use raw (" + tlTexts.size() + " lines)");
+            Util.w("tlyric 时间轴对不上，原样交回去 (" + tlTexts.size() + " lines)");
             return tlyric;
         }
         return out.toString();

@@ -56,6 +56,19 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 4. 确认总开关：`adb shell settings get secure status_bar_show_lyric` → 需要是 `1`
 5. 「歌词源」弹窗建议**留空**（这样内置 Apple/LrcLib 仍作垫底）
 
+## 设置界面（4.14+）
+
+桌面上多了「歌词补丁」入口，点开就是全部配置（Compose + Material 3 Expressive 风格：
+超大圆角容器 / 动态取色 / 胶囊分段 / 滑杆，深浅色自动跟随，底部常驻保存条）。
+
+- **保存并生效**：把整份配置写到 `/data/system/lyricpatch.conf`（优先写已经在用的那个；
+  两个都没有就同时写 `/data/local/tmp/lyricpatch.conf` 兜底），写完会 `cat` 回读校验；
+- 普通 App 进不去这两个目录，所以读写全走 `su`；没 root 时顶部会直接标「无 root」，不假装成功；
+- 头部两个胶囊：**重新读取** / **重启 SystemUI**（`kill $(pidof com.android.systemui)`）；
+- 模块按 mtime 热读配置，保存后**不用重启**，下一次取词就生效（只有第一次启用模块才需要）；
+- 「状态栏预览」那张卡片会跑一遍逐字高亮，并标出当前的滚动参数；
+- 文件里手写的未知键不会被删，只按面板上的键覆盖/重写。
+
 ## 调试
 
 ```bash
@@ -65,6 +78,11 @@ adb logcat -s LyricPatch LyricViewController AppleMusicLyricSource LrcLibLyricSo
 adb shell cmd statusbar lyric sample
 adb shell cmd statusbar lyric clear
 ```
+
+日志默认 `info`：启用时一行 `ready: level=info providers=… word_scroll=on …`，
+之后每首歌只有 `hit:` / `tlyric hit(...)` / `inject: 已注入逐字` 这类关键事件。
+需要细节就把 `log_level` 改 `debug`（每次取词、解析行数、翻译对齐都出来，异常带堆栈），
+再细就是 `verbose`（连每次源调用、每个滚动帧都打）。`log_level=silent` 则一条不剩。
 
 ## 可选配置
 
@@ -111,8 +129,18 @@ kugou_word_timing=true
 # 想要真逐字才联网（会慢 1~2 秒，默认关）
 # prefer_network_word_timing=false
 
-# 只有不超过该字数的行才估算（0 = 不限）。太长会没跑马灯，建议 10~14
+# 只有不超过该字数的行才估算逐字（0 = 不限）。
+# 4.13 起逐字模式下的长句也会跑马灯（见下），已不需要靠这个键避开“显示不全”，建议留 0
 # word_timing_max_chars=0
+
+# 逐字模式下长句的跑马灯（4.13+，默认开）。
+# ROM 的逐字自绘把文本钉死在左边、完全不看 mOffset，句子比控件宽时右边会被裁掉；
+# 模块在 onDraw 外面套一层 canvas.translate 平移整行，节奏复刻 ROM 原生跑马灯
+# word_scroll=true
+# 每 10ms 的像素数（不写 = 取 ROM 的 mScrollSpeed，默认 4）
+# word_scroll_speed=4
+# 开滚前的停顿（ms，不写 = 500，和 ROM 一致）
+# word_scroll_delay=500
 
 # 自动识别增强 LRC（[mm:ss]<mm:ss>词）与 Lyricify Syllable（词(起,长)），转成 yrc（默认开）
 parse_word_formats=true
@@ -124,7 +152,13 @@ parse_word_formats=true
 # 反过来：这些 App 一律跳过（与 whitelist 二选一）
 # app_blacklist=tv.danmaku.bili
 
-# 调试：每行刷新打一条 holder: lyric=… | tl=…
+# 日志级别：silent / error / warn / info / debug / verbose（默认 info）
+#   info     只报启用 / 命中 / 注入这类关键事件，一首歌两三行
+#   debug    加上每次取词、解析、翻译对齐的细节；异常会带完整堆栈
+#   verbose  连每次源调用、每个滚动帧都打（只死磕时开）
+# log_level=info
+
+# 老开关，仍然兼容：debug_log=true 等价于 log_level=debug（log_level 优先）
 # debug_log=false
 ```
 
@@ -158,6 +192,13 @@ translation_providers=https://my.server
   `LyricResponseParser#parseLyrics(JSONObject)` / `#parseLyricText(String)`，
   自动继承 `yrc` 逐字 + `tlyric` 翻译 + TTML 解析。
 - `fetchEnhanced()` 拿不到 word timing 就返回 `null`，让 ROM 自然回退到行级轮。
+- 逐字模式的长句：`LyricTextView#onDraw` 是两条互斥分支（有 `mWordTiming` 就自绘卡拉OK、
+  没有才走跑马灯），而 `LyricViewController#setWordTiming()` 每 250ms 刷新都会把
+  `mStopped` 置 `true` 并移掉 `mStartScrollRunnable`，所以逐字轮永远滚不起来，
+  超宽的行右半边直接被裁。模块只 hook `onDraw`，在其外面 `canvas.translate(dx, 0)`
+  平移整行（ROM 内部的 `clipRect` 高亮会自动跟着裁好，观感和原生跑马灯一致），
+  dx 按 ROM 自己那套参数算（等 500ms，然后每 10ms 走 `mScrollSpeed`），
+  并自己 `postInvalidateDelayed(10)` 维持帧率。
 - 网易云客户端（`*netease*`）且 `mediaId` 为纯数字时，直接按歌曲 id 取词，不搜索。
 - 结果缓存：命中 6 小时，未命中 10 分钟。
 

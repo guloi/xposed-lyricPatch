@@ -54,7 +54,7 @@ public final class QQMusic {
             if (withTranslation) bundle.tlyric = decode(o.optString("trans", ""));
             if (Util.isEmpty(bundle.lrc)) return null;
 
-            Util.log("qq hit \"" + title + " / " + artist + "\" -> mid=" + mid);
+            Util.i("qq hit \"" + title + " / " + artist + "\" -> mid=" + mid);
             return bundle;
         } catch (Throwable t) {
             Util.logw("qq search failed", t);
@@ -88,7 +88,7 @@ public final class QQMusic {
 
                 String tl = decode(new JSONObject(lyr).optString("trans", ""));
                 if (!Util.isEmpty(tl)) {
-                    Util.log("qq tlyric ok -> mid=" + mid + " lines=" + tl.length());
+                    Util.d("qq tlyric ok -> mid=" + mid + " lines=" + tl.length());
                     return tl;
                 }
             } catch (Throwable t) {
