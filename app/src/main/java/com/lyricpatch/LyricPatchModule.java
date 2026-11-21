@@ -31,7 +31,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.6";
+    private static final String VERSION = "4.7";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -469,20 +469,34 @@ public final class LyricPatchModule extends XposedModule {
 
         new Thread(() -> {
             try {
-                Object ours = LyricSourceProxy.fetchValues(fTitle, fArtist, null, fDur,
-                        null, null, false);
-                if (ours == null) return;
-                if (!LyricSourceProxy.resultHasWords(ours)) {
-                    log(Log.INFO, TAG, "inject: 我们也拿不到逐字 (" + fTitle + ")", null);
+                Object base = readField(ctrl, "mCurrentLyrics");
+                Object target = null;
+
+                // ① 首选：只借“逐字”，文本与翻译继续用 ROM 的那份
+                String yrc = LyricFetcher.wordTimingOnly(fTitle, fArtist, fDur, null);
+                if (!Util.isEmpty(yrc)) {
+                    target = LyricSourceProxy.mergeWords(base, yrc);
+                }
+
+                // ② 次选：整份换成我们的（含 yrc）
+                if (target == null) {
+                    Object ours = LyricSourceProxy.fetchValues(fTitle, fArtist, null, fDur,
+                            null, null, false);
+                    if (ours != null && LyricSourceProxy.resultHasWords(ours)) target = ours;
+                }
+
+                if (target == null) {
+                    log(Log.INFO, TAG, "inject: 没有可用的逐字 (" + fTitle + ")", null);
                     return;
                 }
 
+                final Object merged = target;
                 Runnable apply = () -> {
                     try {
-                        writeField(ctrl, "mCurrentLyrics", ours);
+                        writeField(ctrl, "mCurrentLyrics", merged);
                         Method update = findMethod(ctrl, "updateDisplayedLyric");
                         if (update != null) update.invoke(ctrl);
-                        log(Log.INFO, TAG, "inject: 已换成带逐字的歌词 (" + fTitle + ")", null);
+                        log(Log.INFO, TAG, "inject: 已注入逐字 (" + fTitle + ")", null);
                     } catch (Throwable t) {
                         log(Log.WARN, TAG, "inject apply failed", t);
                     }

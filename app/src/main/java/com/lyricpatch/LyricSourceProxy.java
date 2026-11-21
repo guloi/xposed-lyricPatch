@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** 用动态代理实现 SystemUI 里的 LyricSource 接口，无需编译期依赖 */
 public final class LyricSourceProxy implements InvocationHandler {
@@ -23,6 +25,8 @@ public final class LyricSourceProxy implements InvocationHandler {
             "com.android.systemui.statusbar.phone.LyricSource$Cue";
     private static final String CLS_LYRICS =
             "com.android.systemui.statusbar.phone.LyricSource$Lyrics";
+    private static final String CLS_WORD =
+            "com.android.systemui.statusbar.phone.LyricSource$Word";
 
     /** 跨源贴翻译时容忍的最大偏差（ROM 自己是 1000ms） */
     private static final long MATCH_WINDOW_MS = 1500L;
@@ -32,6 +36,7 @@ public final class LyricSourceProxy implements InvocationHandler {
     private static Method sParseLyrics;
     private static Constructor<?> sCueCtor;
     private static Constructor<?> sLyricsCtor;
+    private static Constructor<?> sWordCtor;
 
     private LyricSourceProxy() {
     }
@@ -65,6 +70,8 @@ public final class LyricSourceProxy implements InvocationHandler {
                         .getConstructor(long.class, String.class, String.class, List.class);
                 sLyricsCtor = Class.forName(CLS_LYRICS, false, cl)
                         .getConstructor(TreeMap.class, String.class);
+                sWordCtor = Class.forName(CLS_WORD, false, cl)
+                        .getConstructor(long.class, long.class, String.class);
             } catch (Throwable t) {
                 sCueCtor = null;
                 sLyricsCtor = null;
@@ -115,7 +122,102 @@ public final class LyricSourceProxy implements InvocationHandler {
         return hasWords(lyrics);
     }
 
-    /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */
+    /**
+     * 只把「逐字」贴到已有歌词上：文本、翻译全保留 ROM 那份，
+     * 用 yrc 里时间最近的行（±1.5s）给每个 cue 补 words。
+     * 这样即使我们没匹配到同一份歌词，也能借到别人的逐字。
+     */
+    public static Object mergeWords(Object lyrics, String yrc) {
+        if (lyrics == null || Util.isEmpty(yrc)) return null;
+        if (sCueCtor == null || sLyricsCtor == null || sWordCtor == null) return null;
+
+        try {
+            List<Long> times = new ArrayList<>();
+            List<List<Object>> allWords = new ArrayList<>();
+            parseYrc(yrc, times, allWords);
+            if (times.isEmpty()) return null;
+
+            Object cuesObj = field(lyrics, "mCues");
+            if (!(cuesObj instanceof TreeMap)) return null;
+
+            boolean[] used = new boolean[times.size()];
+            TreeMap<Long, Object> out = new TreeMap<>();
+            int matched = 0;
+
+            for (Object cue : ((TreeMap<?, ?>) cuesObj).values()) {
+                long ts = readLong(cue, "timestampMs");
+                String text = readString(cue, "text");
+                String tr = readString(cue, "translatedText");
+                Object words = readList(cue, "words");
+
+                int best = -1;
+                long bestDiff = Long.MAX_VALUE;
+                for (int i = 0; i < times.size(); i++) {
+                    if (used[i]) continue;
+                    long d = Math.abs(times.get(i) - ts);
+                    if (d < bestDiff) {
+                        bestDiff = d;
+                        best = i;
+                    }
+                }
+                if (best >= 0 && bestDiff <= MATCH_WINDOW_MS) {
+                    used[best] = true;
+                    words = allWords.get(best);
+                    matched++;
+                }
+                out.put(ts, sCueCtor.newInstance(ts, text, tr, words));
+            }
+
+            if (matched == 0) return null;
+            Util.log("mergeWords: " + matched + "/" + out.size() + " 行贴上了逐字");
+            return sLyricsCtor.newInstance(out, field(lyrics, "mUnsyncedLyrics"));
+        } catch (Throwable t) {
+            Util.logw("mergeWords failed", t);
+            return null;
+        }
+    }
+
+    /** yrc → 行时间 + Word 列表 */
+    private static void parseYrc(String yrc, List<Long> times, List<List<Object>> allWords) {
+        Pattern linePat = Pattern.compile("^\\[(\\d+),\\s*(\\d+)]\\s*(.*)$");
+        Pattern wordPat = Pattern.compile("\\((\\d+),\\s*(\\d+),\\s*-?\\d+\\)([^()\\r\\n]*)");
+
+        for (String raw : yrc.split("\\r?\\n")) {
+            String s = raw.trim();
+            if (s.isEmpty() || s.startsWith("{")) continue;
+
+            Matcher lm = linePat.matcher(s);
+            if (!lm.matches()) continue;
+
+            long begin;
+            try {
+                begin = Long.parseLong(lm.group(1));
+            } catch (Throwable t) {
+                continue;
+            }
+            String rest = lm.group(3);
+
+            List<Object> ws = new ArrayList<>();
+            Matcher wm = wordPat.matcher(rest);
+            while (wm.find()) {
+                String content = wm.group(3);
+                if (content.isEmpty()) continue;
+                try {
+                    long st = Long.parseLong(wm.group(1));
+                    long dur = Long.parseLong(wm.group(2));
+                    ws.add(sWordCtor.newInstance(st, st + dur, content));
+                } catch (Throwable ignored) {
+                    // 单个词坏了就跳过
+                }
+            }
+            if (ws.isEmpty()) continue;
+
+            times.add(begin);
+            allWords.add(ws);
+        }
+    }
+
+    /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */    /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */
     public static Object fetchFor(Object track, boolean enhanced) {
         return fetch(track, enhanced);
     }

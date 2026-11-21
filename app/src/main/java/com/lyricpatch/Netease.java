@@ -288,7 +288,54 @@ public final class Netease {
         }
     }
 
-    /** 标题相似度为主，歌手/时长校正 */
+    /** 只要逐字：按 id 依次试三个接口 */
+    public static String yrcById(String id) {
+        if (Util.isEmpty(id)) return null;
+        try {
+            LyricFetcher.Bundle b = fetchLyric(LYRIC_V1, id, false);
+            if (b != null && !Util.isEmpty(b.yrc)) return b.yrc;
+
+            b = fetchLyric(LYRIC_PC, id, false);
+            if (b != null && !Util.isEmpty(b.yrc)) return b.yrc;
+
+            String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
+            String y = sub(new JSONObject(res), "yrc");
+            return Util.isEmpty(y) ? null : y;
+        } catch (Throwable t) {
+            Util.logw("netease yrcById failed", t);
+            return null;
+        }
+    }
+
+    /** 只要逐字：先搜索拿 id */
+    public static String searchYrc(String title, String artist, long durationMs) {
+        try {
+            String[] keywords = Util.isEmpty(artist)
+                    ? new String[]{title}
+                    : new String[]{title + " " + artist, title};
+
+            for (String keyword : keywords) {
+                String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+                if (Util.isEmpty(res)) continue;
+
+                JSONObject result = new JSONObject(res).optJSONObject("result");
+                if (result == null) continue;
+                JSONArray songs = result.optJSONArray("songs");
+                if (songs == null || songs.length() == 0) continue;
+
+                String id = pickBest(songs, title, artist, durationMs);
+                if (id == null) continue;
+
+                String yrc = yrcById(id);
+                if (!Util.isEmpty(yrc)) return yrc;
+            }
+        } catch (Throwable t) {
+            Util.logw("netease searchYrc failed", t);
+        }
+        return null;
+    }
+
+    /** 标题相似度为主，歌手/时长校正 */    /** 标题相似度为主，歌手/时长校正 */
     private static String pickBest(JSONArray songs, String title, String artist, long durationMs) {
         String t = Util.norm(title);
         String a = Util.norm(artist);

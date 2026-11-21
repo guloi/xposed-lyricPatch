@@ -208,7 +208,36 @@ public final class LyricFetcher {
         return bundle;
     }
 
-    /** yrc 里到底有没有真正的词标签 (起,长,0) */
+    /** 只要逐字（不换歌词）：网易云 → 酷狗 */
+    public static String wordTimingOnly(String title, String artist, long durationMs,
+                                        String mediaId) {
+        String yrc = null;
+        try {
+            if (isNumeric(mediaId)) yrc = Netease.yrcById(mediaId);
+            if (Util.isEmpty(yrc)) yrc = Netease.searchYrc(title, artist, durationMs);
+        } catch (Throwable t) {
+            Util.logw("netease wordTimingOnly failed", t);
+        }
+        if (!Util.isEmpty(yrc) && hasWordTags(yrc)) {
+            Util.log("wordTimingOnly: netease 命中 " + title + " (" + yrc.length() + " chars)");
+            return yrc;
+        }
+
+        try {
+            LyricFetcher.Bundle kg = Kugou.fetch(title, artist, durationMs);
+            if (kg != null && hasWordTags(kg.yrc)) {
+                Util.log("wordTimingOnly: kugou 命中 " + title);
+                return kg.yrc;
+            }
+        } catch (Throwable t) {
+            Util.logw("kugou wordTimingOnly failed", t);
+        }
+
+        Util.log("wordTimingOnly: 未命中 " + title + " / " + artist);
+        return null;
+    }
+
+    /** yrc 里到底有没有真正的词标签 (起,长,0) */    /** yrc 里到底有没有真正的词标签 (起,长,0) */
     private static boolean hasWordTags(String yrc) {
         if (Util.isEmpty(yrc)) return false;
         return Pattern.compile("\\(\\d+,\\s*\\d+,\\s*-?\\d+\\)").matcher(yrc).find();
