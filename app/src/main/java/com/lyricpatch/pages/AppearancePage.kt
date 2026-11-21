@@ -136,6 +136,13 @@ fun AppearancePage(onBack: () -> Unit) {
                     display = if (UiPrefs.bouncePercent <= 0) "关闭" else "${UiPrefs.bouncePercent}%",
                     onChange = { UiPrefs.updateBounce(it) },
                 )
+                RowDivider()
+                SwitchRow(
+                    title = "旧版展开动画",
+                    subtitle = "改用 AnimatedVisibility，已修好首次组合不播动画的问题",
+                    checked = UiPrefs.sectionLegacyAnim,
+                    onCheckedChange = { UiPrefs.updateSectionLegacyAnim(it) },
+                )
             }
             CardNote("只影响界面动画，不影响歌词显示。")
 

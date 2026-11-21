@@ -57,6 +57,10 @@ object UiPrefs {
     var colorSpec by mutableStateOf(ColorSpec.SPEC_2025)
         private set
 
+    /** 分组展开/收起使用旧实现（AnimatedVisibility） */
+    var sectionLegacyAnim by mutableStateOf(false)
+        private set
+
     /** 给动画用的缩放幅度 */
     val bounceScale: Float
         get() = bouncePercent / 100f
@@ -74,6 +78,7 @@ object UiPrefs {
         bouncePercent = p.getInt(KEY_BOUNCE, 18).coerceIn(0, 30)
         colorStyle = ColorStyle.of(p.getString(UiKeys.COLOR_STYLE, null))
         colorSpec = ColorSpec.of(p.getString(UiKeys.COLOR_SPEC, null))
+        sectionLegacyAnim = p.getBoolean(UiKeys.SECTION_LEGACY_ANIM, false)
         collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, true)
         sectionsSeen = p.getBoolean(KEY_SECTIONS_SEEN, false)
     }
@@ -102,6 +107,11 @@ object UiPrefs {
 
     fun updateSectionOpen(title: String, open: Boolean) {
         prefs?.edit()?.putBoolean(KEY_SECTION_PREFIX + title, open)?.apply()
+    }
+
+    fun updateSectionLegacyAnim(on: Boolean) {
+        sectionLegacyAnim = on
+        prefs?.edit()?.putBoolean(UiKeys.SECTION_LEGACY_ANIM, on)?.apply()
     }
 
     fun updateColorStyle(style: ColorStyle) {

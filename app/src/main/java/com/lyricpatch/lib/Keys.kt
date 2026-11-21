@@ -48,6 +48,7 @@ object UiKeys {
     const val BOUNCE = "bounce_percent"
     const val COLOR_STYLE = "color_style"
     const val COLOR_SPEC = "color_spec"
+    const val SECTION_LEGACY_ANIM = "section_legacy_anim"
 
     /** 每个大标题的折叠状态：section_<标题> */
     const val SECTION_PREFIX = "section_"

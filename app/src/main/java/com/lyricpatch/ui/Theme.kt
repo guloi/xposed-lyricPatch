@@ -17,8 +17,10 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.ColorUtils
 import com.lyricpatch.lib.color.ColorSpec
 import com.lyricpatch.lib.color.ColorStyle
 import com.lyricpatch.lib.color.accentColor
@@ -103,6 +105,79 @@ private val ExpressiveShapes = Shapes(
     extraLarge = RoundedCornerShape(36.dp),
 )
 
+/** 在 HSL 空间里偏移一个颜色：色相旋转、饱和缩放、明度微调 */
+private fun shiftColor(color: Color, hueShift: Float, satScale: Float, lightDelta: Float): Color {
+    val hsl = FloatArray(3)
+    ColorUtils.colorToHSL(color.toArgb(), hsl)
+    val h = ((hsl[0] + hueShift) % 360f + 360f) % 360f
+    val s = (hsl[1] * satScale).coerceIn(0.02f, 1f)
+    val l = (hsl[2] + lightDelta).coerceIn(0.02f, 0.98f)
+    return Color(ColorUtils.HSLToColor(floatArrayOf(h, s, l)))
+}
+
+/**
+ * 把动态取色（莫奈）的强调色系列按风格 / 规范微调，其余角色原样保留，
+ * 这样壁纸带来的背景与卡片色调不会被冲掉，但色彩风格 / 标准也能生效。
+ */
+private fun restyle(base: ColorScheme, style: ColorStyle, spec: ColorSpec, dark: Boolean): ColorScheme {
+    val delta = if (spec == ColorSpec.SPEC_2025) 0.02f else 0f
+    val p = shiftColor(base.primary, 0f, style.satScale, delta * 0.5f)
+    val pc = shiftColor(base.primaryContainer, 0f, style.satScale, delta)
+    val s = shiftColor(base.secondary, style.secondaryHue, style.satScale, 0f)
+    val sc = shiftColor(base.secondaryContainer, style.secondaryHue, style.satScale, delta)
+    val t = shiftColor(base.tertiary, style.tertiaryHue, style.satScale, 0f)
+    val tc = shiftColor(base.tertiaryContainer, style.tertiaryHue, style.satScale, delta)
+    return if (dark) {
+        darkColorScheme(
+            primary = p, onPrimary = onColor(p),
+            primaryContainer = pc, onPrimaryContainer = onColor(pc),
+            inversePrimary = base.inversePrimary,
+            secondary = s, onSecondary = base.onSecondary,
+            secondaryContainer = sc, onSecondaryContainer = base.onSecondaryContainer,
+            tertiary = t, onTertiary = base.onTertiary,
+            tertiaryContainer = tc, onTertiaryContainer = base.onTertiaryContainer,
+            background = base.background, onBackground = base.onBackground,
+            surface = base.surface, onSurface = base.onSurface,
+            surfaceVariant = base.surfaceVariant, onSurfaceVariant = base.onSurfaceVariant,
+            surfaceTint = p,
+            inverseSurface = base.inverseSurface, inverseOnSurface = base.inverseOnSurface,
+            error = base.error, onError = base.onError,
+            errorContainer = base.errorContainer, onErrorContainer = base.onErrorContainer,
+            outline = base.outline, outlineVariant = base.outlineVariant, scrim = base.scrim,
+            surfaceBright = base.surfaceBright, surfaceDim = base.surfaceDim,
+            surfaceContainer = base.surfaceContainer,
+            surfaceContainerHigh = base.surfaceContainerHigh,
+            surfaceContainerHighest = base.surfaceContainerHighest,
+            surfaceContainerLow = base.surfaceContainerLow,
+            surfaceContainerLowest = base.surfaceContainerLowest,
+        )
+    } else {
+        lightColorScheme(
+            primary = p, onPrimary = onColor(p),
+            primaryContainer = pc, onPrimaryContainer = onColor(pc),
+            inversePrimary = base.inversePrimary,
+            secondary = s, onSecondary = base.onSecondary,
+            secondaryContainer = sc, onSecondaryContainer = base.onSecondaryContainer,
+            tertiary = t, onTertiary = base.onTertiary,
+            tertiaryContainer = tc, onTertiaryContainer = base.onTertiaryContainer,
+            background = base.background, onBackground = base.onBackground,
+            surface = base.surface, onSurface = base.onSurface,
+            surfaceVariant = base.surfaceVariant, onSurfaceVariant = base.onSurfaceVariant,
+            surfaceTint = p,
+            inverseSurface = base.inverseSurface, inverseOnSurface = base.inverseOnSurface,
+            error = base.error, onError = base.onError,
+            errorContainer = base.errorContainer, onErrorContainer = base.onErrorContainer,
+            outline = base.outline, outlineVariant = base.outlineVariant, scrim = base.scrim,
+            surfaceBright = base.surfaceBright, surfaceDim = base.surfaceDim,
+            surfaceContainer = base.surfaceContainer,
+            surfaceContainerHigh = base.surfaceContainerHigh,
+            surfaceContainerHighest = base.surfaceContainerHighest,
+            surfaceContainerLow = base.surfaceContainerLow,
+            surfaceContainerLowest = base.surfaceContainerLowest,
+        )
+    }
+}
+
 @Composable
 fun LyricPatchTheme(
     dark: Boolean = isSystemInDarkTheme(),
@@ -110,7 +185,9 @@ fun LyricPatchTheme(
 ) {
     val context = LocalContext.current
     val scheme = if (UiPrefs.dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        val base = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        // 莫奈取色下也让色彩风格 / 标准生效：只调强调色，背景与卡片保留壁纸色调
+        restyle(base, UiPrefs.colorStyle, UiPrefs.colorSpec, dark)
     } else {
         seededScheme(UiPrefs.accent, UiPrefs.colorStyle, UiPrefs.colorSpec, dark)
     }
