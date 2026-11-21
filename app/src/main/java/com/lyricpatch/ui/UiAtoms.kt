@@ -1,9 +1,18 @@
 package com.lyricpatch.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -110,7 +119,27 @@ fun SwitchRow(
             }
         }
         Spacer(Modifier.width(14.dp))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            // 拇指里带勾/叉，切换时淡入淡出 + 缩放
+            thumbContent = {
+                AnimatedContent(
+                    targetState = checked,
+                    transitionSpec = {
+                        (fadeIn(tween(140)) + scaleIn(initialScale = 0.5f)) togetherWith
+                            (fadeOut(tween(100)) + scaleOut(targetScale = 0.5f))
+                    },
+                    label = "switch-thumb",
+                ) { on ->
+                    Icon(
+                        imageVector = if (on) Icons.Filled.Check else Icons.Filled.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(SwitchDefaults.IconSize),
+                    )
+                }
+            },
+        )
     }
 }
 

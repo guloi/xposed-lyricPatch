@@ -922,23 +922,26 @@ private fun SlideUpSaveBar(
             Box(
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(36.dp)
+                    // 必须抬到系统手势条上方，否则上滑会被系统的 home / 返回手势吃掉
+                    .navigationBarsPadding()
+                    .height(52.dp)
                     .pointerInput(Unit) {
                         var dragged = 0f
                         detectVerticalDragGestures(
                             onDragStart = { dragged = 0f },
                             onVerticalDrag = { _, delta -> dragged += delta },
-                            onDragEnd = { if (dragged < -24f) onShownChange(true) },
+                            onDragEnd = { if (dragged < -14f) onShownChange(true) },
                         )
-                    },
-                contentAlignment = Alignment.BottomCenter,
+                    }
+                    // 手势被系统抢走时的兵底：点一下也能呼出
+                    .clickable { onShownChange(true) },
+                contentAlignment = Alignment.Center,
             ) {
                 Box(
-                    Modifier.padding(bottom = 8.dp)
-                        .width(40.dp)
-                        .height(4.dp)
+                    Modifier.width(48.dp)
+                        .height(5.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)),
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)),
                 )
             }
         }

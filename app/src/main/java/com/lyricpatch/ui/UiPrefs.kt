@@ -19,18 +19,6 @@ object UiPrefs {
 
     const val DEFAULT_ACCENT = "#5B4BC6"
 
-    /** 可选的主题种子色（关闭莫奈取色时用） */
-    val ACCENTS = listOf(
-        "#5B4BC6" to "紫",
-        "#2F6FEB" to "蓝",
-        "#0F8C7E" to "青",
-        "#2E7D32" to "绿",
-        "#B8860B" to "金",
-        "#C2410C" to "橙",
-        "#B3246B" to "粉",
-        "#5F6368" to "灰",
-    )
-
     var dynamicColor by mutableStateOf(true)
         private set
     var accent by mutableStateOf(DEFAULT_ACCENT)
