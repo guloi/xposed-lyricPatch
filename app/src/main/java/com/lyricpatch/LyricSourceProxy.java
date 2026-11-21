@@ -91,11 +91,22 @@ public final class LyricSourceProxy implements InvocationHandler {
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) {
         String name = method.getName();
-        if ("fetch".equals(name)) return fetch(firstArg(args), false);
-        if ("fetchEnhanced".equals(name)) return fetch(firstArg(args), true);
+        if ("fetch".equals(name)) {
+            Util.log("proxy.fetch");
+            return fetch(firstArg(args), false);
+        }
+        if ("fetchEnhanced".equals(name)) {
+            Util.log("proxy.fetchEnhanced");
+            return fetch(firstArg(args), true);
+        }
         if ("toString".equals(name)) return "LyricPatchSource";
         if ("hashCode".equals(name)) return System.identityHashCode(proxy);
         if ("equals".equals(name)) return proxy == firstArg(args);
+
+        // 未知方法：不静默，打出来（以前这里直接 return null，会导致“源看起来在，但从不工作”）
+        Util.log("proxy: unexpected method '" + name + "' "
+                + (method.getReturnType() == null ? "" : method.getReturnType().getSimpleName())
+                + " -> null");
         return null;
     }
 
