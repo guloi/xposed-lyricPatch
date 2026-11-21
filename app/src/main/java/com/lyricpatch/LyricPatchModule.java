@@ -31,7 +31,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.7";
+    private static final String VERSION = "4.9";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -452,6 +452,15 @@ public final class LyricPatchModule extends XposedModule {
         Object mc = readField(self, "mCurrentMediaController");
         if (mc == null) return;
 
+        // 白名单：只给指定 App 注入（避免把 B 站视频标题当歌名）
+        String pkg = callString(mc, "getPackageName");
+        if (!Util.pkgAllowed(pkg)) {
+            if (Util.confBool("debug_log", false)) {
+                log(Log.INFO, TAG, "inject 跳过（不在白名单）: pkg=" + pkg, null);
+            }
+            return;
+        }
+
         String title = metaString(mc, "android.media.metadata.TITLE");
         String artist = metaString(mc, "android.media.metadata.ARTIST");
         long dur = metaLong(mc, "android.media.metadata.DURATION");
@@ -478,7 +487,15 @@ public final class LyricPatchModule extends XposedModule {
                     target = LyricSourceProxy.mergeWords(base, yrc);
                 }
 
-                // ② 次选：整份换成我们的（含 yrc）
+                // ② 次选：按行时间估算逐字（参考音理，观感接近扫光）
+                if (target == null && Util.confBool("estimate_word_timing", true)) {
+                    target = LyricSourceProxy.estimateWords(base);
+                    if (target != null) {
+                        log(Log.INFO, TAG, "inject: 用估算逐字 (" + fTitle + ")", null);
+                    }
+                }
+
+                // ③ 最后：整份换成我们的（含 yrc）
                 if (target == null) {
                     Object ours = LyricSourceProxy.fetchValues(fTitle, fArtist, null, fDur,
                             null, null, false);
@@ -516,7 +533,18 @@ public final class LyricPatchModule extends XposedModule {
         }, "LyricPatch-inject").start();
     }
 
-    private static String metaString(Object controller, String metaKey) {
+    private static String callString(Object target, String method) {
+        try {
+            Method m = findMethod(target, method);
+            if (m == null) return null;
+            Object v = m.invoke(target);
+            return v instanceof String ? (String) v : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String metaString(Object controller, String metaKey) {    private static String metaString(Object controller, String metaKey) {
         try {
             Method getMd = findMethod(controller, "getMetadata");
             if (getMd == null) return null;

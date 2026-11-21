@@ -177,7 +177,66 @@ public final class LyricSourceProxy implements InvocationHandler {
         }
     }
 
-    /** yrc → 行时间 + Word 列表 */
+    /**
+     * 没有真逐字时，按“行时间 + 字符切分”估算一份 words（参考音理的做法）：
+     * 每字时长限在 80~220ms，行尾空白不拉长扫光，观感比“整行均分”自然很多。
+     */
+    public static Object estimateWords(Object lyrics) {
+        if (lyrics == null || sCueCtor == null || sLyricsCtor == null || sWordCtor == null) {
+            return null;
+        }
+        try {
+            Object cuesObj = field(lyrics, "mCues");
+            if (!(cuesObj instanceof TreeMap)) return null;
+
+            List<Object> cues = new ArrayList<>(((TreeMap<?, ?>) cuesObj).values());
+            if (cues.isEmpty()) return null;
+
+            TreeMap<Long, Object> out = new TreeMap<>();
+            int made = 0;
+
+            for (int i = 0; i < cues.size(); i++) {
+                Object cue = cues.get(i);
+                long ts = readLong(cue, "timestampMs");
+                String text = readString(cue, "text");
+                String tr = readString(cue, "translatedText");
+                List<?> words = readList(cue, "words");
+
+                if ((words == null || words.isEmpty()) && !Util.isEmpty(text)) {
+                    long next = i + 1 < cues.size()
+                            ? readLong(cues.get(i + 1), "timestampMs") : ts + 4000L;
+                    long lineDur = Math.max(600L, next - ts);
+                    int chars = text.codePointCount(0, text.length());
+                    long per = Math.max(80L, Math.min(220L, lineDur / Math.max(1, chars)));
+
+                    List<Object> ws = new ArrayList<>();
+                    int idx = 0;
+                    for (int off = 0; off < text.length(); ) {
+                        int cp = text.codePointAt(off);
+                        int n = Character.charCount(cp);
+                        String ch = text.substring(off, off + n);
+                        long st = ts + idx * per;
+                        ws.add(sWordCtor.newInstance(st, st + per, ch));
+                        idx++;
+                        off += n;
+                    }
+                    words = ws;
+                    made++;
+                }
+
+                out.put(ts, sCueCtor.newInstance(ts, text, tr, words));
+            }
+
+            if (made == 0) return lyrics;
+            Util.log("estimateWords: " + made + "/" + out.size() + " 行估算了逐字");
+            return sLyricsCtor.newInstance(out, field(lyrics, "mUnsyncedLyrics"));
+        } catch (Throwable t) {
+            Util.logw("estimateWords failed", t);
+            return null;
+        }
+    }
+
+    /** yrc → 行时间 + Word 列表 */    /** yrc → 行时间 + Word 列表 */
     private static void parseYrc(String yrc, List<Long> times, List<List<Object>> allWords) {
         Pattern linePat = Pattern.compile("^\\[(\\d+),\\s*(\\d+)]\\s*(.*)$");
         Pattern wordPat = Pattern.compile("\\((\\d+),\\s*(\\d+),\\s*-?\\d+\\)([^()\\r\\n]*)");
@@ -347,6 +406,12 @@ public final class LyricSourceProxy implements InvocationHandler {
 
             if (Util.isEmpty(title)) {
                 Util.log("skip(no title): pkg=" + pkg + " mediaId=" + mediaId);
+                return null;
+            }
+
+            // 白名单/黑名单：拦掉 B 站、视频 App 之类把视频标题当歌名的情况
+            if (!Util.pkgAllowed(pkg)) {
+                Util.log("skip(not whitelisted): pkg=" + pkg + " title=" + title);
                 return null;
             }
             Util.log((enhanced ? "track(E): " : "track: ")

@@ -108,6 +108,13 @@ kugou_word_timing=true
 # 自动识别增强 LRC（[mm:ss]<mm:ss>词）与 Lyricify Syllable（词(起,长)），转成 yrc（默认开）
 parse_word_formats=true
 
+# 只处理这些 App 的歌名（逗号分隔包名；留空 = 全部允许；写了名单就只认名单）
+# 典型需求：只想给音乐 App 补词，避免 B 站/视频 App 把视频标题当歌名
+# app_whitelist=moe.ouom.neriplayer,com.netease.cloudmusic,com.tencent.qqmusic,com.kugou.android
+
+# 反过来：这些 App 一律跳过（与 whitelist 二选一）
+# app_blacklist=tv.danmaku.bili
+
 # 调试：每行刷新打一条 holder: lyric=… | tl=…
 # debug_log=false
 ```

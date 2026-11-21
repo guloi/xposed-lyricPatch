@@ -179,7 +179,34 @@ public final class Util {
         return cjk >= 8 && cjk > latin * 2;
     }
 
-    /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */
+    /**
+     * 这个 App 的“歌名”要不要处理。
+     *
+     *   app_whitelist 非空 → 只处理名单内（逗号分隔包名）
+     *   app_blacklist 非空 → 名单内一律跳过
+     *   拿不到包名 → 放行（宁可多试，不乱拒）
+     */
+    static boolean pkgAllowed(String pkg) {
+        if (isEmpty(pkg)) return true;
+
+        String white = conf("app_whitelist", "");
+        if (!isEmpty(white)) {
+            for (String p : white.split(",")) {
+                if (pkg.equals(p.trim())) return true;
+            }
+            return false;
+        }
+
+        String black = conf("app_blacklist", "");
+        if (!isEmpty(black)) {
+            for (String p : black.split(",")) {
+                if (pkg.equals(p.trim())) return false;
+            }
+        }
+        return true;
+    }
+
+    /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */    /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */
     static boolean isNumeric(String s) {
         if (isEmpty(s)) return false;
         for (int i = 0; i < s.length(); i++) {
