@@ -1,13 +1,6 @@
 package com.lyricpatch.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -20,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
@@ -56,6 +50,7 @@ fun SectionHeader(
 ) {
     val arrow by animateFloatAsState(
         targetValue = if (expanded) 0f else -90f,
+        animationSpec = bouncy(),
         label = "section-arrow",
     )
     Row(
@@ -122,20 +117,35 @@ fun SwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            // 拇指里带勾/叉，切换时淡入淡出 + 缩放
+            // 拇指里同时画勾和叉：靠 alpha / 旋转 / 缩放插值，实现「勾转成叉」的形变
             thumbContent = {
-                AnimatedContent(
-                    targetState = checked,
-                    transitionSpec = {
-                        (fadeIn(tween(140)) + scaleIn(initialScale = 0.5f)) togetherWith
-                            (fadeOut(tween(100)) + scaleOut(targetScale = 0.5f))
-                    },
+                val progress by animateFloatAsState(
+                    targetValue = if (checked) 1f else 0f,
+                    animationSpec = bouncy(),
                     label = "switch-thumb",
-                ) { on ->
+                )
+                Box(Modifier.size(SwitchDefaults.IconSize)) {
                     Icon(
-                        imageVector = if (on) Icons.Filled.Check else Icons.Filled.Close,
+                        imageVector = Icons.Filled.Close,
                         contentDescription = null,
-                        modifier = Modifier.size(SwitchDefaults.IconSize),
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            alpha = 1f - progress
+                            rotationZ = -90f * progress
+                            val scale = 0.6f + 0.4f * (1f - progress)
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                            alpha = progress
+                            rotationZ = 90f * (1f - progress)
+                            val scale = 0.6f + 0.4f * progress
+                            scaleX = scale
+                            scaleY = scale
+                        },
                     )
                 }
             },

@@ -4,6 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -82,6 +87,28 @@ fun AppearanceScreen(onBack: () -> Unit) {
                 )
             }
             CardNote("关闭后恢复为固定标题样式，所有分组始终展开。")
+
+            // 只在开启「大标题折叠」时出现，展开/收起都带弹簧动画
+            AnimatedVisibility(
+                visible = UiPrefs.collapsible,
+                enter = expandVertically(animationSpec = bouncy()) +
+                    fadeIn(animationSpec = bouncy()),
+                exit = shrinkVertically(animationSpec = bouncy()) +
+                    fadeOut(animationSpec = bouncy()),
+            ) {
+                Column {
+                    Spacer(Modifier.height(16.dp))
+                    SettingsCard {
+                        SwitchRow(
+                            title = "首次打开默认折叠",
+                            subtitle = "下次进入设置页时所有分组处于收起状态",
+                            checked = UiPrefs.collapseByDefault,
+                            onCheckedChange = { UiPrefs.updateCollapseByDefault(it) },
+                        )
+                    }
+                    CardNote("仅决定进入页面时的初始状态，手动展开的分组不会写回。")
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
 

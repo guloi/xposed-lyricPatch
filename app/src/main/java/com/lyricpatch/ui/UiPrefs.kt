@@ -16,6 +16,7 @@ object UiPrefs {
     private const val KEY_ACCENT = "accent"
     private const val KEY_COLLAPSE = "collapsible_sections"
     private const val KEY_FLOATING_BAR = "floating_save_bar"
+    private const val KEY_COLLAPSE_DEFAULT = "collapse_by_default"
 
     const val DEFAULT_ACCENT = "#5B4BC6"
 
@@ -30,6 +31,10 @@ object UiPrefs {
     var floatingSaveBar by mutableStateOf(false)
         private set
 
+    /** 首次进入设置页时，各分组是否默认折叠 */
+    var collapseByDefault by mutableStateOf(false)
+        private set
+
     private var prefs: android.content.SharedPreferences? = null
 
     fun load(context: Context) {
@@ -40,6 +45,12 @@ object UiPrefs {
         accent = p.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT
         collapsible = p.getBoolean(KEY_COLLAPSE, true)
         floatingSaveBar = p.getBoolean(KEY_FLOATING_BAR, false)
+        collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, false)
+    }
+
+    fun updateCollapseByDefault(on: Boolean) {
+        collapseByDefault = on
+        prefs?.edit()?.putBoolean(KEY_COLLAPSE_DEFAULT, on)?.apply()
     }
 
     fun updateFloatingSaveBar(on: Boolean) {

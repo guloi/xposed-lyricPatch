@@ -1,12 +1,9 @@
 package com.lyricpatch.ui
 
 import android.content.Intent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.core.RepeatMode
@@ -28,6 +25,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
@@ -36,6 +35,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -94,7 +94,9 @@ fun SettingsScreen() {
     val openSections = remember { mutableStateMapOf<String, Boolean>() }
     val collapsible = UiPrefs.collapsible
 
-    fun open(key: String): Boolean = !collapsible || (openSections[key] ?: true)
+    // 没记过的分组取「默认折叠」开关的值：remember 只在进页面时初始化，所以只影响首次打开
+    fun open(key: String): Boolean =
+        !collapsible || (openSections[key] ?: !UiPrefs.collapseByDefault)
 
     // 上滑模式下的保存条是否已呼出
     var saveBarShown by remember { mutableStateOf(false) }
@@ -917,12 +919,26 @@ private fun SlideUpSaveBar(
     onReload: () -> Unit,
     onSave: () -> Unit,
 ) {
+    var panelHeight by remember { mutableIntStateOf(0) }
+    // 收起时把整块面板平移到屏幕外，展开时弹簧回弹到位。
+    // 不用 AnimatedVisibility：它和 Box.align 组合时在某些版本上 enter 不生效，面板会“看不见”。
+    val offsetY by animateIntOffsetAsState(
+        targetValue = IntOffset(0, if (shown) 0 else panelHeight),
+        animationSpec = bouncy(),
+        label = "savebar-offset",
+    )
+    val panelAlpha by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = bouncy(),
+        label = "savebar-alpha",
+    )
+
     Box(Modifier.fillMaxSize()) {
         if (!shown) {
             Box(
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    // 必须抬到系统手势条上方，否则上滑会被系统的 home / 返回手势吃掉
+                    // 抬到系统手势条上方，否则上滑会被系统的 home / 返回手势吃掉
                     .navigationBarsPadding()
                     .height(52.dp)
                     .pointerInput(Unit) {
@@ -946,14 +962,13 @@ private fun SlideUpSaveBar(
             }
         }
 
-        AnimatedVisibility(
-            visible = shown,
-            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            Box(
-                modifier = Modifier.fillMaxWidth().pointerInput(Unit) {
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .offset { offsetY }
+                .graphicsLayer { alpha = panelAlpha }
+                .onSizeChanged { panelHeight = it.height }
+                .pointerInput(Unit) {
                     var dragged = 0f
                     detectVerticalDragGestures(
                         onDragStart = { dragged = 0f },
@@ -961,15 +976,14 @@ private fun SlideUpSaveBar(
                         onDragEnd = { if (dragged > 24f) onShownChange(false) },
                     )
                 },
-            ) {
-                SaveBar(
-                    busy = busy,
-                    dirty = dirty,
-                    onReload = onReload,
-                    onSave = onSave,
-                    floating = true,
-                )
-            }
+        ) {
+            SaveBar(
+                busy = busy,
+                dirty = dirty,
+                onReload = onReload,
+                onSave = onSave,
+                floating = true,
+            )
         }
     }
 }
