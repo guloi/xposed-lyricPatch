@@ -1,6 +1,5 @@
 package com.lyricpatch.lib
 
-import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -25,6 +24,11 @@ import kotlin.math.roundToInt
  *
  * 默认用 [ProgressBody]：高度 + 轻微缩放，平稳。
  * 外观页可切到 [SpringBody]：展开时内容先被弹簧多带下去一点再回到正确位置。
+ *
+ * 两条实现都遵循两个约束：
+ *  1. 内容区始终 `clipToBounds`，避免绘制溢出；
+ *  2. 完全折叠（progress ≈ 0）时不再组合内容——否则高度虽为 0，子节点的
+ *     clickable 区域仍在，点在空白处会“隔着”改到隐藏的开关（这是一个严重 bug）。
  */
 @Composable
 fun SectionBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
@@ -35,29 +39,34 @@ fun SectionBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) 
     }
 }
 
-/** 展开用弹簧、收回用 tween，避免弹簧收尾的顿挫 */
-private fun bodySpec(expanded: Boolean): AnimationSpec<Float> =
-    if (expanded) bouncy() else tween(200, easing = FastOutSlowInEasing)
+/** 内容只在“展开中 / 展开完成”时参与组合 */
+private fun isVisible(expanded: Boolean, progress: Float): Boolean =
+    expanded || progress > 0.01f
 
-/** 默认：单一进度驱动高度与缩放，内容始终组合，输入框状态不会丢 */
+/** 默认：单一进度驱动高度与缩放 */
 @Composable
 private fun ProgressBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
         // 展开用弹簧（有回弹），收回用 tween：弹簧收尾会很慢地蹭到 0 再小过冲一下，
         // 看着就是“顿一下又弹一下”的卡顿感
-        animationSpec = bodySpec(expanded),
+        animationSpec = if (expanded) bouncy() else tween(200, easing = FastOutSlowInEasing),
         label = "section-body",
     )
 
     Layout(
-        content = { Column(content = content) },
-        modifier = Modifier.fillMaxWidth(),
+        content = {
+            if (isVisible(expanded, progress)) {
+                Column(content = content)
+            }
+        },
+        modifier = Modifier.fillMaxWidth().clipToBounds(),
     ) { measurables, constraints ->
-        val placeable = measurables.first().measure(constraints.copy(minHeight = 0))
-        val visibleHeight = (placeable.height * progress).roundToInt().coerceIn(0, placeable.height)
-        layout(placeable.width, visibleHeight) {
-            placeable.placeWithLayer(0, 0) {
+        val placeable = measurables.firstOrNull()?.measure(constraints.copy(minHeight = 0))
+        val fullHeight = placeable?.height ?: 0
+        val visibleHeight = (fullHeight * progress).roundToInt().coerceIn(0, fullHeight)
+        layout(placeable?.width ?: constraints.maxWidth, visibleHeight) {
+            placeable?.placeWithLayer(0, 0) {
                 val scale = 0.94f + 0.06f * progress
                 scaleX = scale
                 scaleY = scale
@@ -76,7 +85,6 @@ private fun ProgressBody(expanded: Boolean, content: @Composable ColumnScope.() 
 private fun SpringBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
-        // 同 ProgressBody：收回不用弹簧，避免尾部顿挫
         animationSpec = if (expanded) {
             spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMediumLow)
         } else {
@@ -87,14 +95,19 @@ private fun SpringBody(expanded: Boolean, content: @Composable ColumnScope.() ->
     val travelPx = with(LocalDensity.current) { 32.dp.toPx() }
 
     Layout(
-        content = { Column(content = content) },
+        content = {
+            if (isVisible(expanded, progress)) {
+                Column(content = content)
+            }
+        },
         modifier = Modifier.fillMaxWidth().clipToBounds(),
     ) { measurables, constraints ->
-        val placeable = measurables.first().measure(constraints.copy(minHeight = 0))
-        val visibleHeight = (placeable.height * progress).roundToInt().coerceIn(0, placeable.height)
-        layout(placeable.width, visibleHeight) {
+        val placeable = measurables.firstOrNull()?.measure(constraints.copy(minHeight = 0))
+        val fullHeight = placeable?.height ?: 0
+        val visibleHeight = (fullHeight * progress).roundToInt().coerceIn(0, fullHeight)
+        layout(placeable?.width ?: constraints.maxWidth, visibleHeight) {
             val y = ((progress - 1f) * travelPx).roundToInt()
-            placeable.placeWithLayer(0, y) {
+            placeable?.placeWithLayer(0, y) {
                 alpha = progress.coerceIn(0f, 1f)
             }
         }
