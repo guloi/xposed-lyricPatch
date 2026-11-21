@@ -4,33 +4,39 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
- * 全局统一的“Q 弹”弹簧：阻尼比 0.55 略低，会回弹一下但不打摆。
- * 各处动画都走它，避免有的地方 tween、有的地方弹簧。
+ * 全局统一的“Q 弹”弹簧：用于高度、位移这类有实际距离的动画。
  */
 fun <T> bouncy(): SpringSpec<T> = spring(
-    dampingRatio = 0.68f,   // 只留一点回弹，不再打摆
+    dampingRatio = 0.68f,
     stiffness = Spring.StiffnessMediumLow,
 )
 
 /**
- * 带回弹的浮点动画。
+ * 每次 key 变化都完整播一遍的“弹一下”，返回缩放系数：1.0 → 1 + amplitude → 1.0。
  *
- * 和 animateXxxAsState 的区别：这里每次目标变化都用 `initialVelocity = 0` 重新起弹，
- * 所以连续快速点击也能看到完整的一次过冲回弹，而不会因为“带着上一次的速度”被抵消掉。
+ * 为什么不直接给值用弹簧：弹簧的过冲量和「剩余距离」成正比。连续点击时值已经贴近目标，
+ * 剩下的距离只有几个百分点，过冲就小到看不见。这里把“弹”从值动画里拆出来，
+ * 每次点击都从 0 重播一遍正弦钟形，幅度固定，所以再怎么连点手感都一致。
  */
 @Composable
-fun rememberBouncyFloat(target: Float): Float {
-    val anim = remember { Animatable(target) }
-    LaunchedEffect(target) {
-        // 被新目标打断 / 组合销毁都是正常情况，别把异常抛到主线程
+fun rememberPopScale(key: Any?): Float {
+    val amplitude = UiPrefs.bounceScale
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(key) {
+        anim.snapTo(0f)
+        // 被打断 / 组合销毁都走这里，不要外抛
         runCatching {
-            anim.animateTo(targetValue = target, animationSpec = bouncy(), initialVelocity = 0f)
+            anim.animateTo(1f, animationSpec = tween(durationMillis = 260))
         }
     }
-    return anim.value
+    if (amplitude <= 0f) return 1f
+    return 1f + amplitude * sin(PI * anim.value).toFloat()
 }

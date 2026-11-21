@@ -16,6 +16,7 @@ object UiPrefs {
     private const val KEY_ACCENT = "accent"
     private const val KEY_COLLAPSE = "collapsible_sections"
     private const val KEY_FLOATING_BAR = "floating_save_bar"
+    private const val KEY_BOUNCE = "bounce_percent"
     private const val KEY_COLLAPSE_DEFAULT = "collapse_by_default"
     private const val KEY_SECTIONS_SEEN = "sections_seen"
 
@@ -43,6 +44,14 @@ object UiPrefs {
     var sectionsSeen by mutableStateOf(false)
         private set
 
+    /** 回弹幅度（百分比），0 = 关闭 */
+    var bouncePercent by mutableStateOf(18)
+        private set
+
+    /** 给动画用的缩放幅度 */
+    val bounceScale: Float
+        get() = bouncePercent / 100f
+
     private var prefs: android.content.SharedPreferences? = null
 
     fun load(context: Context) {
@@ -53,6 +62,7 @@ object UiPrefs {
         accent = p.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT
         collapsible = p.getBoolean(KEY_COLLAPSE, true)
         floatingSaveBar = p.getBoolean(KEY_FLOATING_BAR, false)
+        bouncePercent = p.getInt(KEY_BOUNCE, 18).coerceIn(0, 30)
         collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, true)
         sectionsSeen = p.getBoolean(KEY_SECTIONS_SEEN, false)
     }
@@ -81,6 +91,11 @@ object UiPrefs {
 
     fun updateSectionOpen(title: String, open: Boolean) {
         prefs?.edit()?.putBoolean(KEY_SECTION_PREFIX + title, open)?.apply()
+    }
+
+    fun updateBounce(percent: Int) {
+        bouncePercent = percent.coerceIn(0, 30)
+        prefs?.edit()?.putInt(KEY_BOUNCE, bouncePercent)?.apply()
     }
 
     fun updateFloatingSaveBar(on: Boolean) {

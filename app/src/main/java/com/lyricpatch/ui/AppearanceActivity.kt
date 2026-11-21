@@ -122,6 +122,21 @@ fun AppearanceScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(16.dp))
 
             SettingsCard {
+                SliderRow(
+                    title = "回弹幅度",
+                    subtitle = "折叠、开关、箭头弹一下的幅度，0 为关闭",
+                    value = UiPrefs.bouncePercent,
+                    range = 0f..30f,
+                    steps = 29,
+                    display = if (UiPrefs.bouncePercent <= 0) "关闭" else "${UiPrefs.bouncePercent}%",
+                    onChange = { UiPrefs.updateBounce(it) },
+                )
+            }
+            CardNote("只影响界面动画，不影响歌词显示。")
+
+            Spacer(Modifier.height(16.dp))
+
+            SettingsCard {
                 SwitchRow(
                     title = "保存条上滑呼出",
                     subtitle = "不常驻底部；上滑显示，下滑收起",

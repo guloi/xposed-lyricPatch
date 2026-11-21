@@ -5,6 +5,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /** 设置页与外观页共用的几个小件 */
 
@@ -52,7 +55,13 @@ fun SectionHeader(
     expanded: Boolean = true,
     onToggle: (() -> Unit)? = null,
 ) {
-    val arrow = rememberBouncyFloat(if (expanded) 0f else -90f)
+    val arrow by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "section-arrow",
+    )
+    // 固定幅度的“弹一下”，幅度由「外观 → 回弹幅度」控制
+    val pop = rememberPopScale(expanded)
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
             .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier),
@@ -79,7 +88,12 @@ fun SectionHeader(
                     Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起" else "展开",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.rotate(arrow),
+                    modifier = Modifier
+                        .rotate(arrow)
+                        .graphicsLayer {
+                            scaleX = pop
+                            scaleY = pop
+                        },
                 )
             }
         }
@@ -97,7 +111,12 @@ fun SubHeader(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
-    val arrow = rememberBouncyFloat(if (expanded) 0f else -90f)
+    val arrow by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(200),
+        label = "sub-arrow",
+    )
+    val pop = rememberPopScale(expanded)
     Row(
         modifier = Modifier.fillMaxWidth()
             .clickable(onClick = onToggle)
@@ -118,7 +137,12 @@ fun SubHeader(
             Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "收起" else "展开",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.rotate(arrow),
+            modifier = Modifier
+                .rotate(arrow)
+                .graphicsLayer {
+                    scaleX = pop
+                    scaleY = pop
+                },
         )
     }
 }
@@ -176,8 +200,19 @@ fun SwitchRow(
             onCheckedChange = onCheckedChange,
             // 拇指里同时画勾和叉：靠 alpha / 旋转 / 缩放插值，实现「勾转成叉」的形变
             thumbContent = {
-                val progress = rememberBouncyFloat(if (checked) 1f else 0f)
-                Box(Modifier.size(SwitchDefaults.IconSize)) {
+                val progress by animateFloatAsState(
+                    targetValue = if (checked) 1f else 0f,
+                    animationSpec = tween(160),
+                    label = "thumb-progress",
+                )
+                val pop = rememberPopScale(checked)
+                Box(
+                    Modifier.size(SwitchDefaults.IconSize)
+                        .graphicsLayer {
+                            scaleX = pop
+                            scaleY = pop
+                        },
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
                         contentDescription = null,
@@ -202,6 +237,47 @@ fun SwitchRow(
                     )
                 }
             },
+        )
+    }
+}
+
+@Composable
+fun SliderRow(
+    title: String,
+    subtitle: String?,
+    value: Int,
+    range: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    display: String,
+    onChange: (Int) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 13.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+                Text(
+                    display,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
+        }
+        Slider(
+            value = value.toFloat().coerceIn(range.start, range.endInclusive),
+            onValueChange = { onChange(it.roundToInt()) },
+            valueRange = range,
+            steps = steps,
         )
     }
 }

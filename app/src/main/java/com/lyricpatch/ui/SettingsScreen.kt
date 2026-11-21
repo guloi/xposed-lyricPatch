@@ -42,7 +42,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -155,12 +157,21 @@ fun SettingsScreen() {
     }
 
     // 上次崩过的话，把堆栈弹出来（崩溃时进程已死，只能下次显示）
+    val clipboard = LocalClipboardManager.current
     var crashText by remember { mutableStateOf(CrashLogger.take(context)) }
     if (crashText != null) {
         AlertDialog(
             onDismissRequest = { crashText = null },
             confirmButton = {
                 TextButton(onClick = { crashText = null }) { Text("知道了") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(crashText.orEmpty()))
+                        crashText = null
+                    },
+                ) { Text("复制") }
             },
             title = { Text("上次运行崩溃") },
             text = {
@@ -646,7 +657,8 @@ fun SettingsScreen() {
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter)
                 .navigationBarsPadding()
-                .padding(bottom = snackLift)
+                // 弹簧回弹时会短暂越过 0（负值），而 padding 不接受负数，必须夹住
+                .padding(bottom = snackLift.coerceAtLeast(0.dp))
                 .padding(horizontal = 16.dp),
         )
     }
@@ -914,47 +926,6 @@ private fun ChoiceRow(
 }
 
 @Composable
-private fun SliderRow(
-    title: String,
-    subtitle: String?,
-    value: Int,
-    range: ClosedFloatingPointRange<Float>,
-    steps: Int,
-    display: String,
-    onChange: (Int) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 13.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                if (subtitle != null) {
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
-                Text(
-                    display,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                )
-            }
-        }
-        Slider(
-            value = value.toFloat().coerceIn(range.start, range.endInclusive),
-            onValueChange = { onChange(it.roundToInt()) },
-            valueRange = range,
-            steps = steps,
-        )
-    }
-}
-
-@Composable
 private fun SaveBar(
     busy: Boolean,
     dirty: Boolean,
@@ -1042,7 +1013,7 @@ private fun SlideUpSaveBar(
             modifier = Modifier.align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .offset { offsetY }
-                .graphicsLayer { alpha = panelAlpha }
+                .graphicsLayer { alpha = panelAlpha.coerceIn(0f, 1f) }
                 .onSizeChanged {
                     panelHeight = it.height
                     onHeightChange(it.height)
