@@ -195,23 +195,27 @@ public final class Util {
      *   拿不到包名 → 放行（宁可多试，不乱拒）
      */
     static boolean pkgAllowed(String pkg) {
-        if (isEmpty(pkg)) return true;
-
         String white = conf("app_whitelist", "");
-        if (!isEmpty(white)) {
-            for (String p : white.split(",")) {
-                if (pkg.equals(p.trim())) return true;
-            }
-            return false;
-        }
-
         String black = conf("app_blacklist", "");
-        if (!isEmpty(black)) {
-            for (String p : black.split(",")) {
-                if (pkg.equals(p.trim())) return false;
-            }
+
+        if (isEmpty(pkg)) {
+            // 包名拿不到时：没配白名单就放行；配了白名单则当不命中
+            // （否则“拿不到包名”会变成绕过白名单的后门）
+            return isEmpty(white);
         }
+        if (!isEmpty(white)) return pkgMatches(white, pkg);
+        if (!isEmpty(black)) return !pkgMatches(black, pkg);
         return true;
+    }
+
+    /** 支持完整包名或前缀，逗号分隔；例：tv.danmaku 能盖住 tv.danmaku.bili */
+    private static boolean pkgMatches(String list, String pkg) {
+        for (String raw : list.split(",")) {
+            String entry = raw.trim();
+            if (entry.isEmpty()) continue;
+            if (pkg.equals(entry) || pkg.startsWith(entry)) return true;
+        }
+        return false;
     }
 
     /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */    /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */

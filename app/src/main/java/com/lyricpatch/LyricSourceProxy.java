@@ -38,6 +38,9 @@ public final class LyricSourceProxy implements InvocationHandler {
     private static Constructor<?> sLyricsCtor;
     private static Constructor<?> sWordCtor;
 
+    /** 复用的空歌词实例，用来阻断 ROM 的源链 */
+    private static Object sEmptyLyrics;
+
     private LyricSourceProxy() {
     }
 
@@ -452,8 +455,13 @@ public final class LyricSourceProxy implements InvocationHandler {
 
             // 白名单/黑名单：拦掉 B 站、视频 App 之类把视频标题当歌名的情况
             if (!Util.pkgAllowed(pkg)) {
-                Util.log("skip(not whitelisted): pkg=" + pkg + " title=" + title);
-                return null;
+                // 这里必须返回“空歌词”而不是 null：
+                // null 会让 ROM 继续试内置 Apple/LrcLib 源，那两个源不认识白名单，
+                // 照样会把视频标题当成歌名配上词（白名单就形同虚设）。
+                Object empty = emptyLyrics();
+                Util.log("skip(not whitelisted): pkg=" + pkg + " title=" + title
+                        + " block=" + (empty != null));
+                return empty;
             }
             Util.log((enhanced ? "track(E): " : "track: ")
                     + "title=" + title + " | artist=" + artist + " | album=" + album
@@ -511,6 +519,22 @@ public final class LyricSourceProxy implements InvocationHandler {
             Util.logw("fetch failed", t);
             return null;
         }
+    }
+
+    /**
+     * 空歌词（空 TreeMap、无 unsynced 文本）。
+     * ROM 的取词循环是“拿到非 null 就停”，所以空歌词能让后续内置源全部短路，
+     * 最终 mCurrentLyrics 为空 → updateDisplayedLyric 的 floorEntry 为 null → 状态栏不出字。
+     */
+    private static Object emptyLyrics() {
+        if (sEmptyLyrics != null) return sEmptyLyrics;
+        try {
+            if (sLyricsCtor == null) return null;
+            sEmptyLyrics = sLyricsCtor.newInstance(new TreeMap<Long, Object>(), null);
+        } catch (Throwable t) {
+            Util.logw("create empty lyrics failed", t);
+        }
+        return sEmptyLyrics;
     }
 
     private static Object build(LyricFetcher.Bundle bundle, boolean enhanced) throws Exception {
