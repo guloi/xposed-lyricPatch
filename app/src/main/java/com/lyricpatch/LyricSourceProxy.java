@@ -140,7 +140,11 @@ public final class LyricSourceProxy implements InvocationHandler {
                         + " tl=" + len(bundle.tlyric));
             }
             // 逐字轮没有 word timing 就返回 null，让 ROM 走行级那一轮
-            if (enhanced && !hasWordTiming(lyrics)) return null;
+            if (enhanced && !hasWordTiming(lyrics)) {
+                Util.log("enhanced: 无逐字，回退行级 (bundle yrc="
+                        + (bundle.yrc == null ? 0 : bundle.yrc.length()) + ")");
+                return null;
+            }
             return lyrics;
         } catch (Throwable t) {
             Util.logw("fetch failed", t);

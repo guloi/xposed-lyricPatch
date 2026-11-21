@@ -33,6 +33,8 @@ public final class Kugou {
     private static final String DOWNLOAD =
             "https://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=krc&charset=utf8";
 
+    private static final String REFERER = "https://www.kugou.com/";
+
     /** KRC 解密密钥 */
     private static final int[] KEY = {
             0x40, 0x47, 0x61, 0x77, 0x5e, 0x32, 0x74, 0x47,
@@ -47,43 +49,92 @@ public final class Kugou {
 
     /** @return lrc（行级）+ yrc（逐字，转成网易云格式）；拿不到返回 null */
     public static LyricFetcher.Bundle fetch(String title, String artist, long durationMs) {
+        String[] keywords = Util.isEmpty(artist)
+                ? new String[]{title}
+                : new String[]{title + " - " + artist, title + " " + artist, title};
+
+        for (String keyword : keywords) {
+            LyricFetcher.Bundle b = tryKeyword(keyword, title, artist, durationMs);
+            if (b != null) return b;
+        }
+        Util.log("kugou miss: " + title + " / " + artist);
+        return null;
+    }
+
+    private static LyricFetcher.Bundle tryKeyword(String keyword, String title, String artist,
+                                                 long durationMs) {
         try {
-            String keyword = Util.isEmpty(artist) ? title : title + " - " + artist;
             String res = Util.get(String.format(Locale.ROOT, SEARCH,
-                    Util.enc(keyword), Math.max(0L, durationMs)), null);
-            if (Util.isEmpty(res)) return null;
+                    Util.enc(keyword), Math.max(0L, durationMs)), REFERER);
+            if (Util.isEmpty(res)) {
+                Util.log("kugou search empty: " + keyword);
+                return null;
+            }
 
             JSONArray list = new JSONObject(res).optJSONArray("candidates");
-            if (list == null || list.length() == 0) return null;
+            if (list == null || list.length() == 0) {
+                Util.log("kugou no candidate: " + keyword);
+                return null;
+            }
+            Util.log("kugou candidates=" + list.length() + " for " + keyword);
 
             JSONObject best = pickBest(list, title, artist, durationMs);
-            if (best == null) return null;
+            if (best == null) {
+                Util.log("kugou pick none: " + keyword);
+                return null;
+            }
 
             String id = best.optString("id", "");
             String accesskey = best.optString("accesskey", "");
-            if (Util.isEmpty(id) || Util.isEmpty(accesskey)) return null;
+            if (Util.isEmpty(id) || Util.isEmpty(accesskey)) {
+                Util.log("kugou candidate has no id/accesskey");
+                return null;
+            }
+            Util.log("kugou pick: " + best.optString("song", "?") + " / "
+                    + best.optString("singer", "?"));
 
             String dl = Util.get(String.format(Locale.ROOT, DOWNLOAD,
-                    Util.enc(id), Util.enc(accesskey)), "https://www.kugou.com/");
-            if (Util.isEmpty(dl)) return null;
+                    Util.enc(id), Util.enc(accesskey)), REFERER);
+            if (Util.isEmpty(dl)) {
+                Util.log("kugou download empty");
+                return null;
+            }
 
             String b64 = new JSONObject(dl).optString("content", "");
-            if (Util.isEmpty(b64)) return null;
+            if (Util.isEmpty(b64)) {
+                Util.log("kugou download has no content");
+                return null;
+            }
 
             String krc = decode(b64);
-            if (Util.isEmpty(krc)) return null;
+            if (Util.isEmpty(krc)) {
+                Util.log("kugou decode empty");
+                return null;
+            }
 
             LyricFetcher.Bundle bundle = parseKrc(krc);
-            if (bundle == null) return null;
+            if (bundle == null) {
+                Util.log("kugou krc parse empty");
+                return null;
+            }
 
             Util.log("kugou hit: " + title + " / " + artist
-                    + " lrc=" + (bundle.lrc == null ? 0 : bundle.lrc.length())
-                    + " yrc=" + (bundle.yrc == null ? 0 : bundle.yrc.length()));
+                    + " lrcLines=" + lineCount(bundle.lrc)
+                    + " yrcLines=" + lineCount(bundle.yrc));
             return bundle;
         } catch (Throwable t) {
-            Util.logw("kugou failed", t);
+            Util.logw("kugou failed: " + keyword, t);
             return null;
         }
+    }
+
+    private static int lineCount(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        int n = 1;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '\n') n++;
+        }
+        return n;
     }
 
     private static JSONObject pickBest(JSONArray list, String title, String artist, long durationMs) {
