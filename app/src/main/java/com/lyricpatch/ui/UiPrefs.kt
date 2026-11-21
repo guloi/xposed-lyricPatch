@@ -17,6 +17,10 @@ object UiPrefs {
     private const val KEY_COLLAPSE = "collapsible_sections"
     private const val KEY_FLOATING_BAR = "floating_save_bar"
     private const val KEY_COLLAPSE_DEFAULT = "collapse_by_default"
+    private const val KEY_SECTIONS_SEEN = "sections_seen"
+
+    /** 每个大标题的折叠状态存在 section_<标题> 下 */
+    private const val KEY_SECTION_PREFIX = "section_"
 
     const val DEFAULT_ACCENT = "#5B4BC6"
 
@@ -31,8 +35,12 @@ object UiPrefs {
     var floatingSaveBar by mutableStateOf(false)
         private set
 
-    /** 首次进入设置页时，各分组是否默认折叠 */
-    var collapseByDefault by mutableStateOf(false)
+    /** 首次启动 App 时，各分组是否默认折叠 */
+    var collapseByDefault by mutableStateOf(true)
+        private set
+
+    /** 已经用过一次「默认折叠」了（只生效一次） */
+    var sectionsSeen by mutableStateOf(false)
         private set
 
     private var prefs: android.content.SharedPreferences? = null
@@ -45,12 +53,34 @@ object UiPrefs {
         accent = p.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT
         collapsible = p.getBoolean(KEY_COLLAPSE, true)
         floatingSaveBar = p.getBoolean(KEY_FLOATING_BAR, false)
-        collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, false)
+        collapseByDefault = p.getBoolean(KEY_COLLAPSE_DEFAULT, true)
+        sectionsSeen = p.getBoolean(KEY_SECTIONS_SEEN, false)
     }
 
     fun updateCollapseByDefault(on: Boolean) {
         collapseByDefault = on
         prefs?.edit()?.putBoolean(KEY_COLLAPSE_DEFAULT, on)?.apply()
+    }
+
+    /**
+     * 第一次进入设置页：把「默认折叠」的结果写进去当初始存档。
+     * 之后 sectionOpen() 直接读存档，所以能保留上次手动调整过的状态。
+     */
+    fun ensureSectionDefaults(sections: List<String>) {
+        val p = prefs ?: return
+        if (sectionsSeen) return
+        val edit = p.edit()
+        sections.forEach { edit.putBoolean(KEY_SECTION_PREFIX + it, !collapseByDefault) }
+        edit.putBoolean(KEY_SECTIONS_SEEN, true)
+        edit.apply()
+        sectionsSeen = true
+    }
+
+    fun sectionOpen(title: String): Boolean =
+        prefs?.getBoolean(KEY_SECTION_PREFIX + title, true) ?: !collapseByDefault
+
+    fun updateSectionOpen(title: String, open: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_SECTION_PREFIX + title, open)?.apply()
     }
 
     fun updateFloatingSaveBar(on: Boolean) {

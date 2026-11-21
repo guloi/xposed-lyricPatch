@@ -90,13 +90,20 @@ fun SettingsScreen() {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 大标题收起：key 用标题文字，默认展开；关掉折叠开关时一律展开
+    // 分组折叠状态存在 ui_prefs：第一次进入按「默认折叠」初始化并落盘，
+    // 之后每次进入都恢复上次的状态。
+    remember { UiPrefs.ensureSectionDefaults(SECTION_KEYS) }
     val openSections = remember { mutableStateMapOf<String, Boolean>() }
     val collapsible = UiPrefs.collapsible
 
-    // 没记过的分组取「默认折叠」开关的值：remember 只在进页面时初始化，所以只影响首次打开
     fun open(key: String): Boolean =
-        !collapsible || (openSections[key] ?: !UiPrefs.collapseByDefault)
+        !collapsible || (openSections[key] ?: UiPrefs.sectionOpen(key))
+
+    fun toggle(key: String) {
+        val next = !open(key)
+        openSections[key] = next
+        UiPrefs.updateSectionOpen(key, next)
+    }
 
     // 上滑模式下的保存条是否已呼出
     var saveBarShown by remember { mutableStateOf(false) }
@@ -155,6 +162,8 @@ fun SettingsScreen() {
         }
     }
 
+    // 浮层要能贴住窗口底边（含手势条区域），所以放在 Scaffold 外层
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -173,7 +182,6 @@ fun SettingsScreen() {
             return@Scaffold
         }
 
-        Box(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(inner),
             contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
@@ -227,11 +235,7 @@ fun SettingsScreen() {
                     "数据源",
                     "按顺序匹配，使用第一个返回歌词的源",
                     expanded = open("数据源"),
-                    onToggle = if (collapsible) {
-                        ({ openSections["数据源"] = !open("数据源") })
-                    } else {
-                        null
-                    },
+                    onToggle = if (collapsible) ({ toggle("数据源") }) else null,
                 )
             }
             if (open("数据源")) {
@@ -264,11 +268,7 @@ fun SettingsScreen() {
                     "翻译",
                     "控制第二行显示内容",
                     expanded = open("翻译"),
-                    onToggle = if (collapsible) {
-                        ({ openSections["翻译"] = !open("翻译") })
-                    } else {
-                        null
-                    },
+                    onToggle = if (collapsible) ({ toggle("翻译") }) else null,
                 )
             }
             if (open("翻译")) {
@@ -326,11 +326,7 @@ fun SettingsScreen() {
                     "逐字",
                     "逐字来源与补充方式",
                     expanded = open("逐字"),
-                    onToggle = if (collapsible) {
-                        ({ openSections["逐字"] = !open("逐字") })
-                    } else {
-                        null
-                    },
+                    onToggle = if (collapsible) ({ toggle("逐字") }) else null,
                 )
             }
             if (open("逐字")) {
@@ -397,11 +393,7 @@ fun SettingsScreen() {
                     "长句滚动",
                     "处理超出控件宽度的歌词行",
                     expanded = open("长句滚动"),
-                    onToggle = if (collapsible) {
-                        ({ openSections["长句滚动"] = !open("长句滚动") })
-                    } else {
-                        null
-                    },
+                    onToggle = if (collapsible) ({ toggle("长句滚动") }) else null,
                 )
             }
             if (open("长句滚动")) {
@@ -454,11 +446,7 @@ fun SettingsScreen() {
                     "应用过滤",
                     "白名单与黑名单二选一",
                     expanded = open("应用过滤"),
-                    onToggle = if (collapsible) {
-                        ({ openSections["应用过滤"] = !open("应用过滤") })
-                    } else {
-                        null
-                    },
+                    onToggle = if (collapsible) ({ toggle("应用过滤") }) else null,
                 )
             }
             if (open("应用过滤")) {
@@ -493,11 +481,7 @@ fun SettingsScreen() {
                     "调试",
                     "adb logcat -s LyricPatch",
                     expanded = open("调试"),
-                    onToggle = if (collapsible) {
-                        ({ openSections["调试"] = !open("调试") })
-                    } else {
-                        null
-                    },
+                    onToggle = if (collapsible) ({ toggle("调试") }) else null,
                 )
             }
             if (open("调试")) {
@@ -537,20 +521,22 @@ fun SettingsScreen() {
                 )
             }
         }
+    }
 
-        if (UiPrefs.floatingSaveBar) {
-            SlideUpSaveBar(
-                shown = saveBarShown,
-                onShownChange = { saveBarShown = it },
-                busy = state.busy,
-                dirty = state.dirty,
-                onReload = onReload,
-                onSave = onSave,
-            )
-        }
-        }
+    if (UiPrefs.floatingSaveBar) {
+        SlideUpSaveBar(
+            shown = saveBarShown,
+            onShownChange = { saveBarShown = it },
+            busy = state.busy,
+            dirty = state.dirty,
+            onReload = onReload,
+            onSave = onSave,
+        )
+    }
     }
 }
+
+private val SECTION_KEYS = listOf("数据源", "翻译", "逐字", "长句滚动", "应用过滤", "调试")
 
 private val MACHINE_MODES = listOf(
     "auto" to "跟随 ROM",
@@ -939,8 +925,7 @@ private fun SlideUpSaveBar(
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     // 抬到系统手势条上方，否则上滑会被系统的 home / 返回手势吃掉
-                    .navigationBarsPadding()
-                    .height(52.dp)
+                    .height(72.dp)
                     .pointerInput(Unit) {
                         var dragged = 0f
                         detectVerticalDragGestures(
@@ -954,7 +939,9 @@ private fun SlideUpSaveBar(
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
-                    Modifier.width(48.dp)
+                    Modifier.navigationBarsPadding()
+                        .padding(bottom = 10.dp)
+                        .width(48.dp)
                         .height(5.dp)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)),

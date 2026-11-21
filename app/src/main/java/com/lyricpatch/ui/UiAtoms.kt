@@ -53,29 +53,35 @@ fun SectionHeader(
         animationSpec = bouncy(),
         label = "section-arrow",
     )
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier)
-            .padding(start = 26.dp, end = 22.dp, top = 26.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+            .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleLarge)
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (onToggle != null) {
+                Icon(
+                    Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (expanded) "收起" else "展开",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(arrow),
                 )
             }
-        }
-        if (onToggle != null) {
-            Icon(
-                Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "收起" else "展开",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.rotate(arrow),
-            )
         }
     }
 }

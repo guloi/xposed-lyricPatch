@@ -101,7 +101,7 @@ fun AppearanceScreen(onBack: () -> Unit) {
                     SettingsCard {
                         SwitchRow(
                             title = "首次打开默认折叠",
-                            subtitle = "下次进入设置页时所有分组处于收起状态",
+                            subtitle = "只在第一次启动应用时生效",
                             checked = UiPrefs.collapseByDefault,
                             onCheckedChange = { UiPrefs.updateCollapseByDefault(it) },
                         )
