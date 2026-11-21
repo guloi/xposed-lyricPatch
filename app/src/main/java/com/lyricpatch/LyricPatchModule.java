@@ -30,7 +30,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.4";
+    private static final String VERSION = "4.5";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -97,12 +97,17 @@ public final class LyricPatchModule extends XposedModule {
                 //  - 设置为空：正常补源（内置 Apple/LrcLib 垫底）
                 //  - 设置非空：我们也会按同样协议去问那个 base，但能完整保留 yrc（逐字）；
                 //    ROM 自带 HttpLyricSource 只读 lrc/tlyric，会把逐字丢掉
-                // 启动时创建失败过就再试一次（失败原因会被重新打一遍，不会再被刷掉）
-                Object src = source != null ? source : LyricSourceProxy.get(cl);
-                if (src != null) out.add(src);
-
+                // ROM 自带的每个源都包一层：没逐字就用我们的替换
                 Object original = chain.proceed();
-                if (original instanceof List) out.addAll((List<?>) original);
+                if (original instanceof List) {
+                    for (Object o : (List<?>) original) {
+                        out.add(LyricSourceProxy.wrap(cl, o));
+                    }
+                }
+
+                // 我们自己的源依旧排第一（ROM 列表为空时也能出词）
+                Object src = source != null ? source : LyricSourceProxy.get(cl);
+                if (src != null) out.add(0, src);
 
                 // 每次 create 都打一条：能直接看出“源到底插进去没”和“设置里填了什么”
                 log(Log.INFO, TAG, "create: setting='" + brief(setting)
@@ -113,11 +118,58 @@ public final class LyricPatchModule extends XposedModule {
 
             log(Log.INFO, TAG, "hooked " + CLS_FACTORY + "#create", null);
 
+            hookConcreteSources(cl);
             hookStopLyric(cl);
             hookHolderText(cl);
             hookTranslator(cl);
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
+        }
+    }
+
+    /** ROM 自带的三个具体源：直接 hook 它们的取词方法（不依赖工厂返回值） */
+    private static final String[] CLS_SOURCES = {
+            "com.android.systemui.statusbar.phone.AppleMusicLyricSource",
+            "com.android.systemui.statusbar.phone.LrcLibLyricSource",
+            "com.android.systemui.statusbar.phone.HttpLyricSource",
+    };
+
+    /**
+     * 最底层的一道保险：不管 LyricSourceFactory#create 的返回值有没有被采用，
+     * 只要 ROM 真去取词，就会进这三个类的 fetch/fetchEnhanced。
+     * 拿到结果后：没逐字 → 换成我们自己的（含 yrc）；有逐字 → 原样放行。
+     */
+    private void hookConcreteSources(ClassLoader cl) {
+        for (String name : CLS_SOURCES) {
+            try {
+                Class<?> type = Class.forName(name, false, cl);
+                int count = 0;
+                for (Method m : type.getDeclaredMethods()) {
+                    boolean enhanced = "fetchEnhanced".equals(m.getName());
+                    if (!enhanced && !"fetch".equals(m.getName())) continue;
+                    if (m.getParameterCount() != 1) continue;
+
+                    hook(m).intercept(chain -> {
+                        Object result = chain.proceed();
+                        if (LyricSourceProxy.resultHasWords(result)) return result;
+
+                        List<?> args = chain.getArgs();
+                        Object track = args != null && !args.isEmpty() ? args.get(0) : null;
+                        Object ours = LyricSourceProxy.fetchFor(track, enhanced);
+                        if (ours != null) {
+                            log(Log.INFO, TAG, "source(" + type.getSimpleName() + ")"
+                                    + (enhanced ? "#fetchEnhanced" : "#fetch")
+                                    + ": 无逐字，用我们的结果替换", null);
+                            return ours;
+                        }
+                        return result;
+                    });
+                    count++;
+                }
+                log(Log.INFO, TAG, "hooked " + name + " (" + count + ")", null);
+            } catch (Throwable t) {
+                log(Log.WARN, TAG, "hook source failed: " + name, t);
+            }
         }
     }
 

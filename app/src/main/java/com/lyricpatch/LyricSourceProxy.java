@@ -88,6 +88,93 @@ public final class LyricSourceProxy implements InvocationHandler {
         return sSource;
     }
 
+    /**
+     * 把 ROM 自带的源包一层：
+     *  - 它返回的歌词带逐字 → 原样放行
+     *  - 不带逐字（或直接 null）→ 换成我们自己的结果（含 yrc）
+     *
+     * 这样无论 ROM 到底调不调“我们插进去的那个源”，只要它在这个列表里取词，
+     * 就一定会经过我们的拦截。
+     */
+    public static Object wrap(ClassLoader cl, Object original) {
+        if (original == null) return null;
+        try {
+            Class<?> sourceClass = Class.forName(CLS_SOURCE, false, cl);
+            ClassLoader target = sourceClass.getClassLoader();
+            if (target == null) target = cl;
+            return Proxy.newProxyInstance(target, new Class<?>[]{sourceClass},
+                    new Wrapper(original));
+        } catch (Throwable t) {
+            Util.logw("wrap source failed", t);
+            return original;
+        }
+    }
+
+    /** 给外部（模块）用：这个 Lyrics 带词级时间吗 */
+    public static boolean resultHasWords(Object lyrics) {
+        return hasWords(lyrics);
+    }
+
+    /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */
+    public static Object fetchFor(Object track, boolean enhanced) {
+        return fetch(track, enhanced);
+    }
+
+    /** 歌词里是否已经有词级时间（cue.words 非空） */
+    private static boolean hasWords(Object lyrics) {
+        Object cues = field(lyrics, "mCues");
+        if (!(cues instanceof Map)) return false;
+        try {
+            for (Object cue : ((Map<?, ?>) cues).values()) {
+                Object w = field(cue, "words");
+                if (w instanceof List && !((List<?>) w).isEmpty()) return true;
+            }
+        } catch (Throwable ignored) {
+            // 读不到就当没有
+        }
+        return false;
+    }
+
+    private static final class Wrapper implements InvocationHandler {
+        private final Object inner;
+
+        Wrapper(Object inner) {
+            this.inner = inner;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) {
+            String name = method.getName();
+            Object track = firstArg(args);
+
+            if ("fetch".equals(name) || "fetchEnhanced".equals(name)) {
+                boolean enhanced = "fetchEnhanced".equals(name);
+                Object original = null;
+                try {
+                    original = method.invoke(inner, args);
+                } catch (Throwable t) {
+                    Util.logw("wrapped source failed", t);
+                }
+
+                if (hasWords(original)) return original;
+
+                Object ours = fetch(track, enhanced);
+                if (ours != null) {
+                    Util.log("wrap(" + name + "): 用我们的逐字结果替换"
+                            + (original == null ? "（原源 null）" : "（原源无逐字）"));
+                    return ours;
+                }
+                return original;
+            }
+
+            try {
+                return method.invoke(inner, args);
+            } catch (Throwable t) {
+                return null;
+            }
+        }
+    }
+
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) {
         String name = method.getName();
