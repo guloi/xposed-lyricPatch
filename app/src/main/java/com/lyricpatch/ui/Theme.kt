@@ -27,10 +27,11 @@ fun accentColor(hex: String): Color =
 /** 按 HSL 从一个种子色推派生色，省掉 material-color-utilities 依赖 */
 private fun hsl(seed: Color, light: Float, hueShift: Float = 0f, satScale: Float = 1f): Color {
     val out = FloatArray(3)
-    android.graphics.Color.colorToHSL(seed.toArgb(), out)
+    androidx.core.graphics.ColorUtils.colorToHSL(seed.toArgb(), out)
     val h = (out[0] + hueShift + 360f) % 360f
     val s = (out[1] * satScale).coerceIn(0.12f, 1f)
-    return Color(android.graphics.Color.HSLToColor(floatArrayOf(h, s, light.coerceIn(0.04f, 0.97f))))
+    val l = light.coerceIn(0.04f, 0.97f)
+    return Color(androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(h, s, l)))
 }
 
 private fun onColor(bg: Color): Color =
