@@ -91,6 +91,47 @@ fun SectionHeader(
     }
 }
 
+/**
+ * 卡片内部的子标题：样式比大标题小一级，但同样可收起。
+ * 它不读「大标题折叠」开关，也不参与分组状态的存档，始终可以独立展开。
+ */
+@Composable
+fun SubHeader(
+    title: String,
+    subtitle: String?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val arrow by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = bouncy(),
+        label = "sub-arrow",
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 20.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Icon(
+            Icons.Filled.KeyboardArrowDown,
+            contentDescription = if (expanded) "收起" else "展开",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.rotate(arrow),
+        )
+    }
+}
+
 /** 分组内容：展开 / 收起都走弹簧，收起后不占高度 */
 @Composable
 fun SectionBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) {

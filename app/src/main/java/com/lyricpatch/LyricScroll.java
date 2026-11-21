@@ -57,6 +57,8 @@ final class LyricScroll {
     private static boolean sConfOn = true;
     /** 跟随：先定住，唱到快贴右边才跟着挪（不一直滚，更像 ROM） */
     private static boolean sConfFollow = true;
+    /** 开始滚动的时机（整句百分比）；0 = 自动 */
+    private static int sConfStartPct;
     private static int sConfSpeed;
     private static int sConfDelay = 500;
 
@@ -157,8 +159,15 @@ final class LyricScroll {
         // 所以大部分时间是静的，不会从行首一直滚到尾。
         long holdMs = 0L;
         if (sConfFollow) {
-            float fits = width / Math.max(1f, textWidth);
-            float hold = Math.min(0.8f, Math.max(0.35f, fits));
+            float hold;
+            if (sConfStartPct > 0) {
+                // 用户指定了百分比：整句播到第 x% 时开始滚动
+                hold = sConfStartPct / 100f;
+            } else {
+                // 自动：一屏能装下整行的多少，就是能静止多大比例
+                float fits = width / Math.max(1f, textWidth);
+                hold = Math.min(0.8f, Math.max(0.35f, fits));
+            }
             holdMs = (long) (span * hold);
         }
 
@@ -199,6 +208,7 @@ final class LyricScroll {
         sConfAt = now;
         sConfOn = Util.confBool("word_scroll", true);
         sConfFollow = Util.confBool("word_scroll_follow", true);
+        sConfStartPct = Math.min(95, Math.max(0, Util.confInt("word_scroll_start_pct", 0)));
         sConfSpeed = Math.max(0, Util.confInt("word_scroll_speed", 0));
         sConfDelay = Math.max(0, Util.confInt("word_scroll_delay", 500));
     }

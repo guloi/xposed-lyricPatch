@@ -3,6 +3,7 @@ package com.lyricpatch.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -32,6 +33,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
@@ -112,6 +114,18 @@ fun SettingsScreen() {
 
     // 上滑模式下的保存条是否已呼出
     val saveBarShown = remember { mutableStateOf(false) }
+    // 保存条实际高度：Snackbar 要跟着一起抬高，否则会被盖住
+    var saveBarHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val snackLift by animateDpAsState(
+        targetValue = if (UiPrefs.floatingSaveBar && saveBarShown.value) {
+            with(density) { saveBarHeightPx.toDp() }
+        } else {
+            0.dp
+        },
+        animationSpec = bouncy(),
+        label = "snack-lift",
+    )
 
     // 跟随列表滑动：手指往上滑（内容向上滚）呼出，往下滑收回
     val scrollConnection = remember {
@@ -185,7 +199,8 @@ fun SettingsScreen() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(hostState = snackbar) },
+        // 常驻模式交给 Scaffold；跟随模式那个 Host 放到外层，才能盖在保存条上面
+        snackbarHost = { if (!UiPrefs.floatingSaveBar) SnackbarHost(hostState = snackbar) },
         bottomBar = {
             // 常驻模式才占 Scaffold 底栏；上滑模式走浮层，不占高度
             if (!UiPrefs.floatingSaveBar) {
@@ -421,10 +436,32 @@ fun SettingsScreen() {
                     RowDivider()
                     SwitchRow(
                         title = "word_scroll_follow",
-                        subtitle = "接近右边缘才滚动；关闭则从行首开始",
+                        subtitle = "按下方设定的时机跟着滚；关闭则从行首匀速滚动",
                         checked = state.flag("word_scroll_follow"),
                         onCheckedChange = { state.putFlag("word_scroll_follow", it) },
                     )
+                    RowDivider()
+                    // 子折叠：不受「大标题折叠」开关影响，也不参与分组状态落盘
+                    val startOpen = remember { mutableStateOf(true) }
+                    SubHeader(
+                        title = "开始滚动的时机",
+                        subtitle = "整句播放到第几成时开始跟随",
+                        expanded = startOpen.value,
+                        onToggle = { startOpen.value = !startOpen.value },
+                    )
+                    SectionBody(startOpen.value) {
+                        SliderRow(
+                            title = "word_scroll_start_pct",
+                            subtitle = "0 为自动（按一屏能装下多少算）",
+                            value = state.num("word_scroll_start_pct", 0),
+                            range = 0f..90f,
+                            steps = 17,
+                            display = state.num("word_scroll_start_pct", 0).let {
+                                if (it <= 0) "自动" else "${it}%"
+                            },
+                            onChange = { state.put("word_scroll_start_pct", it.toString()) },
+                        )
+                    }
                     RowDivider()
                     SliderRow(
                         title = "word_scroll_speed",
@@ -559,10 +596,20 @@ fun SettingsScreen() {
             // 纯跟随滑动：上滑呼出、下滑收回（列表滚不动时上下划同样会触发）
             shown = saveBarShown.value,
             onShownChange = { saveBarShown.value = it },
+            onHeightChange = { saveBarHeightPx = it },
             busy = state.busy,
             dirty = state.dirty,
             onReload = onReload,
             onSave = onSave,
+        )
+
+        // Snackbar 放在保存条之后，并随保存条高度抬起来
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = snackLift)
+                .padding(horizontal = 16.dp),
         )
     }
     }
@@ -932,6 +979,7 @@ private fun SaveBar(
 private fun SlideUpSaveBar(
     shown: Boolean,
     onShownChange: (Boolean) -> Unit,
+    onHeightChange: (Int) -> Unit,
     busy: Boolean,
     dirty: Boolean,
     onReload: () -> Unit,
@@ -957,7 +1005,10 @@ private fun SlideUpSaveBar(
                 .fillMaxWidth()
                 .offset { offsetY }
                 .graphicsLayer { alpha = panelAlpha }
-                .onSizeChanged { panelHeight = it.height }
+                .onSizeChanged {
+                    panelHeight = it.height
+                    onHeightChange(it.height)
+                }
                 .pointerInput(Unit) {
                     var dragged = 0f
                     detectVerticalDragGestures(

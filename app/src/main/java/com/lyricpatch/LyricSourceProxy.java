@@ -183,8 +183,9 @@ public final class LyricSourceProxy implements InvocationHandler {
     }
 
     /**
-     * 没有真逐字时，按“行时间 + 字符切分”估算一份 words（参考音理的做法）：
-     * 每字时长限在 80~220ms，行尾空白不拉长扫光，观感比“整行均分”自然很多。
+     * 没有真逐字时，按行时长估算一份 words。
+     * 新版算法：不再给每字固定步长，而是按字重（汉字/假名 2，其余 1）把整行时长恰好分完，
+     * 这样高亮会在下一行开始的瞬间正好扫完，不会提前跑完或拖到下一行。
      */
     public static Object estimateWords(Object lyrics) {
         if (lyrics == null || sCueCtor == null || sLyricsCtor == null || sWordCtor == null) {
@@ -223,20 +224,7 @@ public final class LyricSourceProxy implements InvocationHandler {
                         continue;
                     }
 
-                    long per = Math.max(80L, Math.min(220L, lineDur / Math.max(1, chars)));
-
-                    List<Object> ws = new ArrayList<>();
-                    int idx = 0;
-                    for (int off = 0; off < text.length(); ) {
-                        int cp = text.codePointAt(off);
-                        int n = Character.charCount(cp);
-                        String ch = text.substring(off, off + n);
-                        long st = ts + idx * per;
-                        ws.add(sWordCtor.newInstance(st, st + per, ch));
-                        idx++;
-                        off += n;
-                    }
-                    words = ws;
+                    words = spreadWords(text, ts, ts + lineDur);
                     made++;
                 }
 
@@ -297,31 +285,53 @@ public final class LyricSourceProxy implements InvocationHandler {
      * 把 [start,end] 均分到原句的每个字符上。
      * 字样直接用原句的字符，所以画出来一定和歌词完全一致（不会截断/串字）。
      */
+    /**
+     * 把 [start,end] 按字重分给每个字符：汉字、假名占 2 个时间单位，拉丁/数字/标点/空格各占 1。
+     * 因为总权重被完整分配，最后一个字会正好在 end 结束，逐字高亮与行尾对齐。
+     */
     private static List<Object> spreadWords(String text, long start, long end) {
         List<Object> out = new ArrayList<>();
         if (Util.isEmpty(text) || sWordCtor == null) return out;
 
-        int chars = text.codePointCount(0, text.length());
-        if (chars <= 0) return out;
+        int total = 0;
+        for (int off = 0; off < text.length(); ) {
+            int cp = text.codePointAt(off);
+            total += weightOf(cp);
+            off += Character.charCount(cp);
+        }
+        if (total <= 0) return out;
 
-        long span = Math.max(200L, end - start);
-        long per = Math.max(60L, span / chars);
+        double span = Math.max(200L, end - start);
+        double perUnit = span / total;
 
-        int idx = 0;
+        long cursor = start;
+        int consumed = 0;
         for (int off = 0; off < text.length(); ) {
             int cp = text.codePointAt(off);
             int n = Character.charCount(cp);
             String ch = text.substring(off, off + n);
-            long st = start + idx * per;
+            consumed += weightOf(cp);
+            long next = start + (long) (consumed * perUnit);
+            if (next <= cursor) next = cursor + 1;   // 至少 1ms，避免零时长
             try {
-                out.add(sWordCtor.newInstance(st, st + per, ch));
+                out.add(sWordCtor.newInstance(cursor, next, ch));
             } catch (Throwable ignored) {
                 // 单个字坏了就跳过
             }
-            idx++;
+            cursor = next;
             off += n;
         }
         return out;
+    }
+
+    /** 字重：汉字 / 假名 / 扩展 A 区 算 2，其它算 1 */
+    private static int weightOf(int cp) {
+        if ((cp >= 0x4E00 && cp <= 0x9FFF)
+                || (cp >= 0x3400 && cp <= 0x4DBF)
+                || (cp >= 0x3040 && cp <= 0x30FF)) {
+            return 2;
+        }
+        return 1;
     }
 
     /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */    /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */

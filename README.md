@@ -180,9 +180,10 @@ kugou_word_timing=true
 # 模块在 onDraw 外面套一层 canvas.translate 平移整行
 # 关掉（false）= 完全不平移，回到 ROM 原行为（长句右半边会被裁）
 # word_scroll=true
-# 跟随模式（4.18+，默认开）：先让整行定住，唱到快贴右边才跟着挪 —— 不一直滚，更像 ROM；
-# 关掉就是从行首匀速滑到句尾
+# 跟随模式（默认开）：先让整行定住，到时机后再跟着挪；关掉就是从行首匀速滑到句尾
 # word_scroll_follow=true
+# 开始滚动的时机：整句播放到第几 % 时开始跟滚（0 = 自动，按一屏能装下多少算）
+# word_scroll_start_pct=0
 # 滚动速度：不写（或 0）= 自动，按这一行的词级时长把整段滚动铺满，句尾刚好露出来；
 # 填数字 = 固定 px/10ms（4 就是 ROM 跑马灯那档，长句反而会跑得太快）
 # word_scroll_speed=0
@@ -234,6 +235,7 @@ translation_providers=https://my.server
 
 ## 实现要点
 
+- 估算逐字按字重分配整行时长（汉字/假名 2、其余 1），最后一个字正好在下一行开始时结束。
 - `LyricSource` 是 SystemUI 里的接口，模块用 `Proxy` 实现，**无需 compileOnly 引用 SystemUI 类**；
   `Track` 字段用反射读，`Lyrics` 不自己拼，直接交给 ROM 的
   `LyricResponseParser#parseLyrics(JSONObject)` / `#parseLyricText(String)`，

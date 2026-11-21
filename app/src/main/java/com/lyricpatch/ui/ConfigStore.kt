@@ -51,7 +51,8 @@ object ConfigStore {
         "parse_word_formats", "kugou_word_timing", "estimate_word_timing",
         "prefer_network_word_timing", "synth_word_timing", "auto_word_timing",
         "word_timing_max_chars",
-        "word_scroll", "word_scroll_follow", "word_scroll_speed", "word_scroll_delay",
+        "word_scroll", "word_scroll_follow", "word_scroll_start_pct",
+        "word_scroll_speed", "word_scroll_delay",
         "app_whitelist", "app_blacklist",
         "log_level", "debug_log",
     )
@@ -75,6 +76,7 @@ object ConfigStore {
         "word_timing_max_chars" to "0",
         "word_scroll" to "true",
         "word_scroll_follow" to "true",
+        "word_scroll_start_pct" to "0",
         "word_scroll_speed" to "0",
         "word_scroll_delay" to "500",
         "debug_log" to "false",
