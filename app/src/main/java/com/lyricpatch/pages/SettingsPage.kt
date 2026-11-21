@@ -895,44 +895,6 @@ private fun PresetChips(current: String, onPick: (String) -> Unit) {
 }
 
 @Composable
-private fun ChoiceRow(
-    title: String,
-    subtitle: String?,
-    options: List<Pair<String, String>>,
-    selected: String,
-    onSelect: (String) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 13.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        if (subtitle != null) {
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { (value, label) ->
-                FilterChip(
-                    selected = value == selected,
-                    onClick = { onSelect(value) },
-                    label = {
-                        Text(
-                            label,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun SaveBar(
     busy: Boolean,
     dirty: Boolean,
