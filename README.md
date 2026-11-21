@@ -105,6 +105,15 @@ synth_word_timing=false
 # 没有逐字时去酷狗要**真逐字**（KRC，解密+转成 yrc），覆盖率高，默认开
 kugou_word_timing=true
 
+# 估算逐字（行时间 + 字符切分），本地即时，不会拖慢显示（默认开）
+# estimate_word_timing=true
+
+# 想要真逐字才联网（会慢 1~2 秒，默认关）
+# prefer_network_word_timing=false
+
+# 只有不超过该字数的行才估算（0 = 不限）。太长会没跑马灯，建议 10~14
+# word_timing_max_chars=0
+
 # 自动识别增强 LRC（[mm:ss]<mm:ss>词）与 Lyricify Syllable（词(起,长)），转成 yrc（默认开）
 parse_word_formats=true
 

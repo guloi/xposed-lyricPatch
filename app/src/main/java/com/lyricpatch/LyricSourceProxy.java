@@ -133,8 +133,8 @@ public final class LyricSourceProxy implements InvocationHandler {
 
         try {
             List<Long> times = new ArrayList<>();
-            List<List<Object>> allWords = new ArrayList<>();
-            parseYrc(yrc, times, allWords);
+            List<long[]> spans = new ArrayList<>();
+            parseYrc(yrc, times, spans);
             if (times.isEmpty()) return null;
 
             Object cuesObj = field(lyrics, "mCues");
@@ -162,7 +162,8 @@ public final class LyricSourceProxy implements InvocationHandler {
                 }
                 if (best >= 0 && bestDiff <= MATCH_WINDOW_MS) {
                     used[best] = true;
-                    words = allWords.get(best);
+                    long[] span = spans.get(best);
+                    words = spreadWords(text, span[0], span[1]);
                     matched++;
                 }
                 out.put(ts, sCueCtor.newInstance(ts, text, tr, words));
@@ -207,6 +208,14 @@ public final class LyricSourceProxy implements InvocationHandler {
                             ? readLong(cues.get(i + 1), "timestampMs") : ts + 4000L;
                     long lineDur = Math.max(600L, next - ts);
                     int chars = text.codePointCount(0, text.length());
+
+                    // 太长的行就不估：一估 ROM 就走自绘，反而会没跑马灯/显示不全
+                    int maxChars = Util.confInt("word_timing_max_chars", 0);
+                    if (maxChars > 0 && chars > maxChars) {
+                        out.put(ts, sCueCtor.newInstance(ts, text, tr, words));
+                        continue;
+                    }
+
                     long per = Math.max(80L, Math.min(220L, lineDur / Math.max(1, chars)));
 
                     List<Object> ws = new ArrayList<>();
@@ -236,8 +245,11 @@ public final class LyricSourceProxy implements InvocationHandler {
         }
     }
 
-    /** yrc → 行时间 + Word 列表 */    /** yrc → 行时间 + Word 列表 */
-    private static void parseYrc(String yrc, List<Long> times, List<List<Object>> allWords) {
+    /**
+     * yrc → 每行开始时间 + 该行的 [起,止] 时间跨度。
+     * 只拿时间，不拿字样：字样永远用原句，避免“别人的歌词被画出来”。
+     */
+    private static void parseYrc(String yrc, List<Long> times, List<long[]> spans) {
         Pattern linePat = Pattern.compile("^\\[(\\d+),\\s*(\\d+)]\\s*(.*)$");
         Pattern wordPat = Pattern.compile("\\((\\d+),\\s*(\\d+),\\s*-?\\d+\\)([^()\\r\\n]*)");
 
@@ -254,26 +266,55 @@ public final class LyricSourceProxy implements InvocationHandler {
             } catch (Throwable t) {
                 continue;
             }
-            String rest = lm.group(3);
-
-            List<Object> ws = new ArrayList<>();
-            Matcher wm = wordPat.matcher(rest);
+            long first = -1L;
+            long last = -1L;
+            Matcher wm = wordPat.matcher(lm.group(3));
             while (wm.find()) {
-                String content = wm.group(3);
-                if (content.isEmpty()) continue;
                 try {
                     long st = Long.parseLong(wm.group(1));
                     long dur = Long.parseLong(wm.group(2));
-                    ws.add(sWordCtor.newInstance(st, st + dur, content));
+                    if (first < 0) first = st;
+                    last = st + dur;
                 } catch (Throwable ignored) {
                     // 单个词坏了就跳过
                 }
             }
-            if (ws.isEmpty()) continue;
+            if (first < 0 || last <= first) continue;
 
             times.add(begin);
-            allWords.add(ws);
+            spans.add(new long[]{first, last});
         }
+    }
+
+    /**
+     * 把 [start,end] 均分到原句的每个字符上。
+     * 字样直接用原句的字符，所以画出来一定和歌词完全一致（不会截断/串字）。
+     */
+    private static List<Object> spreadWords(String text, long start, long end) {
+        List<Object> out = new ArrayList<>();
+        if (Util.isEmpty(text) || sWordCtor == null) return out;
+
+        int chars = text.codePointCount(0, text.length());
+        if (chars <= 0) return out;
+
+        long span = Math.max(200L, end - start);
+        long per = Math.max(60L, span / chars);
+
+        int idx = 0;
+        for (int off = 0; off < text.length(); ) {
+            int cp = text.codePointAt(off);
+            int n = Character.charCount(cp);
+            String ch = text.substring(off, off + n);
+            long st = start + idx * per;
+            try {
+                out.add(sWordCtor.newInstance(st, st + per, ch));
+            } catch (Throwable ignored) {
+                // 单个字坏了就跳过
+            }
+            idx++;
+            off += n;
+        }
+        return out;
     }
 
     /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */    /** 给外部（模块）用：按 Track 拿我们自己的歌词（含 yrc） */

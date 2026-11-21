@@ -99,6 +99,14 @@ public final class Util {
         return v == null || v.trim().isEmpty() ? def : v.trim();
     }
 
+    static int confInt(String key, int def) {
+        try {
+            return Integer.parseInt(conf(key, String.valueOf(def)).trim());
+        } catch (Throwable t) {
+            return def;
+        }
+    }
+
     static boolean confBool(String key, boolean def) {
         String v = conf().getProperty(key);
         if (v == null) return def;

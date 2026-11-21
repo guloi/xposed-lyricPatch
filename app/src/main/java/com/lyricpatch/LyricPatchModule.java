@@ -31,7 +31,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.9";
+    private static final String VERSION = "4.10";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -481,25 +481,21 @@ public final class LyricPatchModule extends XposedModule {
                 Object base = readField(ctrl, "mCurrentLyrics");
                 Object target = null;
 
-                // ① 首选：只借“逐字”，文本与翻译继续用 ROM 的那份
-                String yrc = LyricFetcher.wordTimingOnly(fTitle, fArtist, fDur, null);
-                if (!Util.isEmpty(yrc)) {
-                    target = LyricSourceProxy.mergeWords(base, yrc);
-                }
-
-                // ② 次选：按行时间估算逐字（参考音理，观感接近扫光）
-                if (target == null && Util.confBool("estimate_word_timing", true)) {
+                // ① 先做“估算逐字”：纯本地、毫秒级，不会把歌词拖慢
+                if (Util.confBool("estimate_word_timing", true)) {
                     target = LyricSourceProxy.estimateWords(base);
                     if (target != null) {
-                        log(Log.INFO, TAG, "inject: 用估算逐字 (" + fTitle + ")", null);
+                        log(Log.INFO, TAG, "inject: 估算逐字（本地即时） (" + fTitle + ")", null);
                     }
                 }
 
-                // ③ 最后：整份换成我们的（含 yrc）
-                if (target == null) {
-                    Object ours = LyricSourceProxy.fetchValues(fTitle, fArtist, null, fDur,
-                            null, null, false);
-                    if (ours != null && LyricSourceProxy.resultHasWords(ours)) target = ours;
+                // ② 想要真逐字再联网（默关闭，避免显示慢）
+                if (Util.confBool("prefer_network_word_timing", false)) {
+                    String yrc = LyricFetcher.wordTimingOnly(fTitle, fArtist, fDur, null);
+                    if (!Util.isEmpty(yrc)) {
+                        Object merged = LyricSourceProxy.mergeWords(base, yrc);
+                        if (merged != null) target = merged;
+                    }
                 }
 
                 if (target == null) {
