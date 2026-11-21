@@ -1,6 +1,7 @@
 package com.lyricpatch.ui
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
@@ -502,13 +503,36 @@ fun SettingsScreen() {
                 CardNote("保存后立即生效，无需重启 SystemUI。首次启用模块或更换 SystemUI 版本后需重启一次。")
             }
             item {
-                Text(
-                    "LyricPatch v$version",
-                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.outline,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "LyricPatch v$version",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Source code",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable {
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://github.com/guloi/xposed-lyricPatch"),
+                                        ),
+                                    )
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
             }
         }
     }
