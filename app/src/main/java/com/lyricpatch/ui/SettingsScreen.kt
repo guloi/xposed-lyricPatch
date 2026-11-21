@@ -16,7 +16,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
@@ -114,8 +113,6 @@ fun SettingsScreen() {
     // 上滑模式下的保存条是否已呼出
     val saveBarShown = remember { mutableStateOf(false) }
 
-    val listState = rememberLazyListState()
-
     // 跟随列表滑动：手指往上滑（内容向上滚）呼出，往下滑收回
     val scrollConnection = remember {
         object : NestedScrollConnection {
@@ -204,7 +201,6 @@ fun SettingsScreen() {
         }
 
         LazyColumn(
-            state = listState,
             modifier = Modifier.fillMaxSize().padding(inner).nestedScroll(scrollConnection),
             contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
         ) {
@@ -560,9 +556,8 @@ fun SettingsScreen() {
 
     if (UiPrefs.floatingSaveBar) {
         SlideUpSaveBar(
-            // 能滚动时跟随滚动显隐；内容不足一屏、根本滚不动时直接常驻
-            shown = saveBarShown.value ||
-                (!listState.canScrollForward && !listState.canScrollBackward),
+            // 纯跟随滑动：上滑呼出、下滑收回（列表滚不动时上下划同样会触发）
+            shown = saveBarShown.value,
             onShownChange = { saveBarShown.value = it },
             busy = state.busy,
             dirty = state.dirty,
