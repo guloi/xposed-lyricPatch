@@ -544,7 +544,7 @@ public final class LyricPatchModule extends XposedModule {
         }
     }
 
-    private static String metaString(Object controller, String metaKey) {    private static String metaString(Object controller, String metaKey) {
+    private static String metaString(Object controller, String metaKey) {
         try {
             Method getMd = findMethod(controller, "getMetadata");
             if (getMd == null) return null;
