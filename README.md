@@ -71,7 +71,7 @@ adb shell cmd statusbar lyric clear
 `/data/local/tmp/lyricpatch.conf`（系统 UI 要能读，`chmod 644`），缺失就用默认值：
 
 ```properties
-# 主歌词源顺序，逗号分隔：netease / qq / lrclib / https://your.server
+# 主歌词源顺序，逗号分隔：netease / qq / kugou / lrclib / https://your.server
 providers=netease,lrclib
 
 # 翻译总开关（配合 ROM 的「显示翻译」），false 则完全不请求翻译
@@ -98,8 +98,15 @@ hide_empty_translation=true
 # 中文歌词（无假名 & 汉字占多数）不去翻译源要翻译，避免同名错贴（默认开）
 skip_translation_for_chinese=true
 
-# 没拿到真逐字歌词时，按行时间轴合成一份，让状态栏也有卡拉OK动画（默认开）
-synth_word_timing=true
+# 没拿到真逐字时，按行时间轴「合成」一份逐字（默认关：按字数均分，跟实际演唱对不上）
+# 想要“至少有动画”可以打开，能接受节奏偏差就行
+synth_word_timing=false
+
+# 没有逐字时去酷狗要**真逐字**（KRC，解密+转成 yrc），覆盖率高，默认开
+kugou_word_timing=true
+
+# 自动识别增强 LRC（[mm:ss]<mm:ss>词）与 Lyricify Syllable（词(起,长)），转成 yrc（默认开）
+parse_word_formats=true
 
 # 调试：每行刷新打一条 holder: lyric=… | tl=…
 # debug_log=false

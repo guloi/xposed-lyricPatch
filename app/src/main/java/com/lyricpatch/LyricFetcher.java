@@ -78,6 +78,8 @@ public final class LyricFetcher {
                         bundle = Netease.lrcLib(title, artist, album, durationMs);
                     } else if ("qq".equalsIgnoreCase(provider)) {
                         bundle = QQMusic.search(title, artist, durationMs, withTranslation);
+                    } else if ("kugou".equalsIgnoreCase(provider)) {
+                        bundle = Kugou.fetch(title, artist, durationMs);
                     } else if (provider.startsWith("http://") || provider.startsWith("https://")) {
                         bundle = HttpSource.fetch(provider, title, artist, album, durationMs,
                                 packageName, mediaId, withTranslation);
@@ -93,6 +95,18 @@ public final class LyricFetcher {
         }
 
         if (bundle != null && bundle.empty()) bundle = null;
+
+        // 增强 LRC / Lyricify Syllable 自带词级时间，识别到就直接转成 yrc（真逐字）
+        if (bundle != null && Util.isEmpty(bundle.yrc)
+                && Util.confBool("parse_word_formats", true)) {
+            String rawForm = !Util.isEmpty(bundle.lrc) ? bundle.lrc : bundle.yrc;
+            WordFormats.Result fmt = WordFormats.convert(rawForm);
+            if (fmt != null) {
+                bundle.lrc = fmt.lrc;
+                bundle.yrc = fmt.yrc;
+                Util.log("word format -> yrc: " + title);
+            }
+        }
 
         // 中文歌词不需要翻译：丢掉源里自带的 tlyric，也不再去 translation_providers 搜。
         // （中文歌去搜翻译源，很容易把同名/近似歌的 tlyric 错贴到正确歌词上 → 洗不掉的残影）
@@ -126,9 +140,32 @@ public final class LyricFetcher {
             }
         }
 
+        // 还是没有逐字？去酷狗要真逐字（KRC，参考音理的做法：只吃真数据，不算）
+        if (bundle != null && Util.isEmpty(bundle.yrc) && !Util.isEmpty(bundle.lrc)
+                && Util.confBool("kugou_word_timing", true)) {
+            try {
+                LyricFetcher.Bundle kg = Kugou.fetch(title, artist, durationMs);
+                if (kg != null && !Util.isEmpty(kg.yrc)) {
+                    int mine = lines(bundle.lrc);
+                    int theirs = lines(kg.lrc);
+                    // 行数差太多就不能用：说明搜到的不是同一个录音，强行套会串词
+                    if (mine > 0 && theirs > 0
+                            && theirs >= mine * 0.85 && theirs <= mine * 1.15) {
+                        bundle.yrc = kg.yrc;
+                        if (Util.isEmpty(bundle.lrc) && !Util.isEmpty(kg.lrc)) bundle.lrc = kg.lrc;
+                        Util.log("kugou word timing: " + title + " lines=" + theirs);
+                    } else {
+                        Util.log("kugou word timing 行数不符，放弃: " + their(mine, theirs));
+                    }
+                }
+            } catch (Throwable t) {
+                Util.logw("kugou word timing failed", t);
+            }
+        }
+
         // 还是没有逐字？用行时间轴合成一份，让状态栏也有卡拉OK动画
         if (bundle != null && Util.isEmpty(bundle.yrc) && !Util.isEmpty(bundle.lrc)
-                && Util.confBool("synth_word_timing", true)) {
+                && Util.confBool("synth_word_timing", false)) {
             String yrc = WordTiming.synth(bundle.lrc);
             if (yrc != null) {
                 bundle.yrc = yrc;
@@ -139,6 +176,19 @@ public final class LyricFetcher {
         CACHE.put(key, new Entry(bundle, now + (bundle == null ? MISS_TTL : OK_TTL)));
         if (CACHE.size() > 128) CACHE.clear();
         return bundle;
+    }
+
+    private static int lines(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        int n = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '\n') n++;
+        }
+        return n + 1;
+    }
+
+    private static String their(int mine, int theirs) {
+        return "mine=" + mine + " kugou=" + theirs;
     }
 
     private static boolean isNumeric(String s) {

@@ -16,6 +16,10 @@ public final class Netease {
     private static final String LYRIC_V1 =
             "https://music.163.com/api/song/lyric/v1?id=%s&cp=false"
                     + "&lv=-1&kv=-1&tv=-1&rv=-1&yv=-1&ytv=-1&yrv=-1";
+
+    /** PC 客户端参数：部分歌的 yrc 只在这里给 */
+    private static final String LYRIC_PC =
+            "https://music.163.com/api/song/lyric?os=pc&id=%s&lv=-1&kv=0&tv=-1&yv=-1";
     private static final String DETAIL =
             "https://music.163.com/api/song/detail?ids=%5B%s%5D";
     private static final String LRCLIB_GET =
@@ -45,24 +49,47 @@ public final class Netease {
         if (b == null) return null;
         if (!Util.isEmpty(b.yrc) && !Util.isEmpty(b.lrc)) return b;
 
-        LyricFetcher.Bundle v1 = lyricV1(id, withTranslation);
-        if (v1 == null) return b;
-
-        if (Util.isEmpty(b.yrc) && !Util.isEmpty(v1.yrc)) {
-            b.yrc = v1.yrc;
-            Util.log("netease lyric/v1 gave word timing: id=" + id);
+        // 依次试两个接口，谁先给出逐字就用谁
+        if (Util.isEmpty(b.yrc)) {
+            merge(b, fetchLyric(LYRIC_V1, id, withTranslation), withTranslation, "lyric/v1");
         }
-        if (Util.isEmpty(b.lrc) && !Util.isEmpty(v1.lrc)) b.lrc = v1.lrc;
-        if (withTranslation && Util.isEmpty(b.tlyric) && !Util.isEmpty(v1.tlyric)) {
-            b.tlyric = v1.tlyric;
+        if (Util.isEmpty(b.yrc)) {
+            merge(b, fetchLyric(LYRIC_PC, id, withTranslation), withTranslation, "lyric?os=pc");
+        }
+        if (Util.isEmpty(b.yrc)) {
+            Util.log("netease 无逐字歌词: id=" + id);
         }
         return b;
     }
 
-    /** 新版接口：优先逐字翻译 ytlrc，其次普通 tlyric */
-    static LyricFetcher.Bundle lyricV1(String id, boolean withTranslation) {
+    private static void merge(LyricFetcher.Bundle b, LyricFetcher.Bundle extra,
+                              boolean withTranslation, String from) {
+        if (b == null || extra == null) return;
+
+        if (Util.isEmpty(b.yrc) && !Util.isEmpty(extra.yrc)) {
+            b.yrc = extra.yrc;
+            Util.log("netease " + from + " gave word timing: id, lines=" + countLines(extra.yrc));
+        }
+        if (Util.isEmpty(b.lrc) && !Util.isEmpty(extra.lrc)) b.lrc = extra.lrc;
+        if (withTranslation && Util.isEmpty(b.tlyric) && !Util.isEmpty(extra.tlyric)) {
+            b.tlyric = extra.tlyric;
+        }
+    }
+
+    private static int countLines(String s) {
+        if (s == null || s.isEmpty()) return 0;
+        int n = 1;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.charAt(i) == '\n') n++;
+        }
+        return n;
+    }
+
+    /** 同一套解析：优先逐字翻译 ytlrc，其次普通 tlyric */
+    private static LyricFetcher.Bundle fetchLyric(String urlFmt, String id,
+                                                 boolean withTranslation) {
         try {
-            String res = Util.get(String.format(LYRIC_V1, Util.enc(id)), REFERER);
+            String res = Util.get(String.format(urlFmt, Util.enc(id)), REFERER);
             if (Util.isEmpty(res)) return null;
 
             JSONObject root = new JSONObject(res);
@@ -76,7 +103,7 @@ public final class Netease {
             }
             return b;
         } catch (Throwable t) {
-            Util.logw("netease lyric/v1 failed", t);
+            Util.logw("netease extra lyric failed", t);
             return null;
         }
     }
