@@ -9,6 +9,6 @@ import androidx.compose.animation.core.spring
  * 各处动画都走它，避免有的地方 tween、有的地方弹簧。
  */
 fun <T> bouncy(): SpringSpec<T> = spring(
-    dampingRatio = 0.42f,   // 低一点，回弹更明显
-    stiffness = Spring.StiffnessMedium,
+    dampingRatio = 0.68f,   // 只留一点回弹，不再打摆
+    stiffness = Spring.StiffnessMediumLow,
 )

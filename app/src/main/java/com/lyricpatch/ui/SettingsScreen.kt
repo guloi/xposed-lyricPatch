@@ -26,6 +26,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Brush
@@ -107,7 +111,20 @@ fun SettingsScreen() {
     }
 
     // 上滑模式下的保存条是否已呼出
-    var saveBarShown by remember { mutableStateOf(false) }
+    val saveBarShown = remember { mutableStateOf(false) }
+
+    // 跟随列表滑动：手指往上滑（内容向上滚）呼出，往下滑收回
+    val scrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (UiPrefs.floatingSaveBar) {
+                    if (available.y < -2f) saveBarShown.value = true
+                    else if (available.y > 2f) saveBarShown.value = false
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     val context = LocalContext.current
     val version = remember(context) {
@@ -184,7 +201,7 @@ fun SettingsScreen() {
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(inner),
+            modifier = Modifier.fillMaxSize().padding(inner).nestedScroll(scrollConnection),
             contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
         ) {
             item {
@@ -539,8 +556,8 @@ fun SettingsScreen() {
 
     if (UiPrefs.floatingSaveBar) {
         SlideUpSaveBar(
-            shown = saveBarShown,
-            onShownChange = { saveBarShown = it },
+            shown = saveBarShown.value,
+            onShownChange = { saveBarShown.value = it },
             busy = state.busy,
             dirty = state.dirty,
             onReload = onReload,
@@ -938,17 +955,9 @@ private fun SlideUpSaveBar(
             Box(
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    // 抬到系统手势条上方，否则上滑会被系统的 home / 返回手势吃掉
                     .height(72.dp)
-                    .pointerInput(Unit) {
-                        var dragged = 0f
-                        detectVerticalDragGestures(
-                            onDragStart = { dragged = 0f },
-                            onVerticalDrag = { _, delta -> dragged += delta },
-                            onDragEnd = { if (dragged < -14f) onShownChange(true) },
-                        )
-                    }
-                    // 手势被系统抢走时的兵底：点一下也能呼出
+                    // 拖动手势交给列表（上滑列表就会把保存条带出来），
+                    // 这里只留一个点击兵底：内容不足一屏、滚不动时用
                     .clickable { onShownChange(true) },
                 contentAlignment = Alignment.Center,
             ) {
