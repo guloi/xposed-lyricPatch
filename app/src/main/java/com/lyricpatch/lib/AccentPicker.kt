@@ -57,7 +57,8 @@ fun AccentPicker() {
     var style by remember { mutableStateOf(ACCENT_STYLES.first()) }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Text("色彩风格", style = MaterialTheme.typography.titleSmall)
+        // 这里是“预设色板”，与下方的“色彩风格（tonal style）”不是一回事
+        Text("色板", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ACCENT_STYLES.forEach { item ->

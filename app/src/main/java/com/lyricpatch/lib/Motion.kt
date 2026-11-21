@@ -27,8 +27,8 @@ fun <T> bouncy(): SpringSpec<T> = spring(
  * 这里把“弹”从值动画里拆出来，每次点击都从 0 重播一遍正弦钟形，幅度固定。
  */
 @Composable
-fun rememberPopScale(key: Any?): Float {
-    val amplitude = UiPrefs.bounceScale
+fun rememberPopScale(key: Any?, factor: Float = 1f): Float {
+    val amplitude = UiPrefs.bounceScale * factor
     // 每次 key 变化都换一个新的 Animatable（初值 0），而不是对同一个实例 snapTo：
     // snapTo 落在协程被取消的窗口里会抛 CancellationException，把后面的 animateTo 一起带走，
     // 结果 anim 停在 0（sin(π·0)=0）——表现就是“这一次没有回弹”。

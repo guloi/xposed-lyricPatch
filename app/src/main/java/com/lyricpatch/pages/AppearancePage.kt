@@ -68,26 +68,27 @@ fun AppearancePage(onBack: () -> Unit) {
                     Column {
                         RowDivider()
                         AccentPicker()
-                        RowDivider()
-                        ChoiceRow(
-                            title = "色彩风格",
-                            subtitle = "种子色如何映射到主色与三色",
-                            options = ColorStyle.entries.map { it.name to it.label },
-                            selected = UiPrefs.colorStyle.name,
-                            onSelect = { UiPrefs.updateColorStyle(ColorStyle.of(it)) },
-                        )
-                        RowDivider()
-                        ChoiceRow(
-                            title = "色彩标准",
-                            subtitle = "容器明度档位，2025 对应 Expressive",
-                            options = ColorSpec.entries.map { it.name to it.label },
-                            selected = UiPrefs.colorSpec.name,
-                            onSelect = { UiPrefs.updateColorSpec(ColorSpec.of(it)) },
-                        )
                     }
                 }
+                // 色彩风格 / 标准始终显示，不随莫奈取色开关隐藏
+                RowDivider()
+                ChoiceRow(
+                    title = "色彩风格",
+                    subtitle = "种子色如何映射到主色与三色",
+                    options = ColorStyle.entries.map { it.name to it.label },
+                    selected = UiPrefs.colorStyle.name,
+                    onSelect = { UiPrefs.updateColorStyle(ColorStyle.of(it)) },
+                )
+                RowDivider()
+                ChoiceRow(
+                    title = "色彩标准",
+                    subtitle = "容器明度档位，2025 对应 Expressive",
+                    options = ColorSpec.entries.map { it.name to it.label },
+                    selected = UiPrefs.colorSpec.name,
+                    onSelect = { UiPrefs.updateColorSpec(ColorSpec.of(it)) },
+                )
             }
-            CardNote("关闭后使用下方选定的颜色作为主题色。")
+            CardNote("关闭莫奈取色后，使用上方选定的颜色与风格作为主题色。")
 
             Spacer(Modifier.height(16.dp))
 

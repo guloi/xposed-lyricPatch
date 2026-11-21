@@ -36,10 +36,14 @@ fun SectionHeader(
         animationSpec = tween(200),
         label = "section-arrow",
     )
-    // 固定幅度的“弹一下”，幅度由「外观 → 回弹幅度」控制
-    val pop = rememberPopScale(expanded)
+    // 整张卡片弹一下（幅度由「外观 → 回弹幅度」控制），比只弹箭头明显得多
+    val pop = rememberPopScale(expanded, factor = 0.6f)
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
+            .graphicsLayer {
+                scaleX = pop
+                scaleY = pop
+            }
             .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -64,12 +68,7 @@ fun SectionHeader(
                     Icons.Filled.KeyboardArrowDown,
                     contentDescription = if (expanded) "收起" else "展开",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .rotate(arrow)
-                        .graphicsLayer {
-                            scaleX = pop
-                            scaleY = pop
-                        },
+                    modifier = Modifier.rotate(arrow),
                 )
             }
         }

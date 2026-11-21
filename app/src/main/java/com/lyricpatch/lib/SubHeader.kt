@@ -36,9 +36,13 @@ fun SubHeader(
         animationSpec = tween(200),
         label = "sub-arrow",
     )
-    val pop = rememberPopScale(expanded)
+    val pop = rememberPopScale(expanded, factor = 0.5f)
     Row(
         modifier = Modifier.fillMaxWidth()
+            .graphicsLayer {
+                scaleX = pop
+                scaleY = pop
+            }
             .clickable(onClick = onToggle)
             .padding(horizontal = 20.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -57,12 +61,7 @@ fun SubHeader(
             Icons.Filled.KeyboardArrowDown,
             contentDescription = if (expanded) "收起" else "展开",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .rotate(arrow)
-                .graphicsLayer {
-                    scaleX = pop
-                    scaleY = pop
-                },
+            modifier = Modifier.rotate(arrow),
         )
     }
 }
