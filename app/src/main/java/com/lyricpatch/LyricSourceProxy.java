@@ -9,6 +9,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -357,6 +358,68 @@ public final class LyricSourceProxy implements InvocationHandler {
         }
     }
 
+    /** 纯音乐标记：网易云这类源常用一句“纯音乐，请欣赏”占位 */
+    private static final String[] INSTRUMENTAL_MARKS = {
+            // 只留“只有占位词里才会出现”的：别把歌词里的“请欣赏”误判成纯音乐
+            "纯音乐", "纯音樂",
+            "instrumental", "no lyrics", "music only", "off vocal", "offvocal",
+            "インスト", "オフボーカル",
+    };
+
+    /**
+     * 纯音乐判定（保守）：
+     *  - 有逐字 → 肯定在唱，不算
+     *  - 文本里命中“纯音乐 / instrumental”这类标记 → 算
+     *  - 整份只有 1~2 行、且时间跨度不到 12 秒 → 算（占位词常见形态）
+     * 拿不准就当不是，宁可多显示也不误藏。
+     */
+    static boolean looksInstrumental(Object lyrics) {
+        if (lyrics == null) return false;
+        if (hasWords(lyrics)) return false;
+
+        Object cuesObj = field(lyrics, "mCues");
+        if (!(cuesObj instanceof Map)) return false;
+        Map<?, ?> cues = (Map<?, ?>) cuesObj;
+        if (cues.isEmpty()) return true;
+
+        int lines = 0;
+        long first = Long.MAX_VALUE;
+        long last = Long.MIN_VALUE;
+        StringBuilder sample = new StringBuilder();
+        try {
+            for (Object cue : cues.values()) {
+                String text = readString(cue, "text");
+                long ts = readLong(cue, "timestampMs");
+                if (ts < first) first = ts;
+                if (ts > last) last = ts;
+                if (text == null) continue;
+                String trimmed = text.trim();
+                if (trimmed.isEmpty()) continue;
+                lines++;
+                if (sample.length() < 512) sample.append(trimmed).append('\n');
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+        if (lines == 0) return true;
+
+        String lower = sample.toString().toLowerCase(Locale.ROOT);
+        for (String mark : INSTRUMENTAL_MARKS) {
+            if (lower.contains(mark)) return true;
+        }
+        return lines <= 2 && last > first && (last - first) < 12000L;
+    }
+
+    /** 开关 + 判定一起：hide_instrumental 开着且确实是纯音乐才藏 */
+    public static boolean shouldHideInstrumental(Object lyrics) {
+        return Util.confBool("hide_instrumental", true) && looksInstrumental(lyrics);
+    }
+
+    /** 给 ROM 的“空歌词”：非 null 会短路源链，但一个字都不显示 */
+    public static Object blankForRom() {
+        return emptyLyrics();
+    }
+
     /** 歌词里是否已经有词级时间（cue.words 非空） */
     private static boolean hasWords(Object lyrics) {
         Object cues = field(lyrics, "mCues");
@@ -397,6 +460,10 @@ public final class LyricSourceProxy implements InvocationHandler {
                     Util.logw("wrapped source failed", t);
                 }
 
+                if (shouldHideInstrumental(original)) {
+                    Util.d("wrap(" + name + "): 原源返回的是纯音乐，不出词");
+                    return emptyLyrics();
+                }
                 if (hasWords(original)) return original;
 
                 Object ours = fetch(track, enhanced);
@@ -493,6 +560,12 @@ public final class LyricSourceProxy implements InvocationHandler {
             if (lyrics == null) {
                 Util.w("parse failed: " + title);
                 return null;
+            }
+
+            // 纯音乐：直接给 ROM 一份空歌词，源链短路、状态栏不出字
+            if (shouldHideInstrumental(lyrics)) {
+                Util.i("instrumental, 不出词: " + title);
+                return emptyLyrics();
             }
 
             String langSample = !Util.isEmpty(bundle.lrc) ? bundle.lrc

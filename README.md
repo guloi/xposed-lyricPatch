@@ -46,6 +46,19 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 # 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
+工具链（4.19+）：
+
+| 项 | 版本 |
+|---|---|
+| compileSdk / targetSdk | **37（Android 17）**，跟 ROM 的 SystemUI 对齐 |
+| minSdk | 29 |
+| AGP / Gradle | 9.0.0 / 9.3.0（wrapper 与 CI 同步） |
+| Kotlin | 2.2.0（Compose 编译器插件同版本） |
+| Compose BOM | 2025.06.01 |
+
+需要 JDK 17+；`android-37` 平台由 AGP 自动补装（CI 镜像的 licenses 已接受）。
+targetSdk 37 会强制 edge-to-edge，设置页已经用 `enableEdgeToEdge()` + Scaffold insets 处理好了。
+
 
 ## 安装 / 启用
 
@@ -64,6 +77,9 @@ MediaSessionManager → LyricViewController.selectActiveSession()
 - **保存并生效**：写进 App 自己的内部存储（见上面「可选配置」），先写 `.tmp` 再 rename，
   SystemUI 不会读到写了一半的文件；
 - **不需要 root**：没有 `su`、没有 root 检测，也没有“重启 SystemUI”这种按钮；
+- 头部第二、三个胶囊：**已同步/未保存**（配置有没有存过盘）、**已启用/未启用**
+  （打开界面时给 SystemUI 发一条 `com.lyricpatch.PING`，hook 侧收到就回写一次报活；
+  10 秒探一次，所以在 LSPosed 里启用或重启 SystemUI 后会自动变化）；
 - 头部胶囊：**重新读取**（从文件重拉一份）；
 - 保存后发一条 `com.lyricpatch.CONFIG_CHANGED` 广播，SystemUI 侧的 hook 收到就把快照作废、
   重新拉一次（还有 5 分钟一次的兜底轮询）；读取永远在后台线程，不卡取词和绘制，
@@ -101,6 +117,9 @@ SystemUI 是另一个进程，直接读这个文件会被权限和 SELinux 拦�
 ```properties
 # 主歌词源顺序，逗号分隔：netease / qq / kugou / lrclib / https://your.server
 providers=netease,lrclib
+
+# 纯音乐不出词（默认开）：源只给“纯音乐，请欣赏”这类占位行时，整条不显示
+# hide_instrumental=true
 
 # 翻译总开关（配合 ROM 的「显示翻译」），false 则完全不请求翻译
 translation=true
@@ -146,7 +165,11 @@ kugou_word_timing=true
 # 逐字模式下长句的跑马灯（4.13+，默认开）。
 # ROM 的逐字自绘把文本钉死在左边、完全不看 mOffset，句子比控件宽时右边会被裁掉；
 # 模块在 onDraw 外面套一层 canvas.translate 平移整行
+# 关掉（false）= 完全不平移，回到 ROM 原行为（长句右半边会被裁）
 # word_scroll=true
+# 跟随模式（4.18+，默认开）：先让整行定住，唱到快贴右边才跟着挪 —— 不一直滚，更像 ROM；
+# 关掉就是从行首匀速滑到句尾
+# word_scroll_follow=true
 # 滚动速度：不写（或 0）= 自动，按这一行的词级时长把整段滚动铺满，句尾刚好露出来；
 # 填数字 = 固定 px/10ms（4 就是 ROM 跑马灯那档，长句反而会跑得太快）
 # word_scroll_speed=0
@@ -208,8 +231,9 @@ translation_providers=https://my.server
   `mStopped` 置 `true` 并移掉 `mStartScrollRunnable`，所以逐字轮永远滚不起来，
   超宽的行右半边直接被裁。模块只 hook `onDraw`，在其外面 `canvas.translate(dx, 0)`
   平移整行（ROM 内部的 `clipRect` 高亮会自动跟着裁好，观感和原生跑马灯一致），
-  dx 默认按「这一行的词级时长」自动铺满（等 500ms 起滚，句尾刚好露出来，
-  不会一上来就冲到底），并自己 `postInvalidateDelayed(10)` 维持帧率。
+  dx 在 `word_scroll_follow`（默认开）下先定住，等已唱位置快贴到右边（比例取
+  `控件宽 / 整行宽`）才按「这一行还要唱多久」铺满剩下的路程，句尾刚好露出来；
+  关掉 follow 则从行首匀速滑到句尾。两种都在后台算好，自己 `postInvalidateDelayed` 驱动帧。
 - 网易云客户端（`*netease*`）且 `mediaId` 为纯数字时，直接按歌曲 id 取词，不搜索。
 - 结果缓存：命中 6 小时，未命中 10 分钟。
 

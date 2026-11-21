@@ -34,7 +34,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.17";
+    private static final String VERSION = "4.22";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -136,6 +136,9 @@ public final class LyricPatchModule extends XposedModule {
 
             // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
             log(Log.INFO, TAG, "ready: " + Util.summary(), null);
+
+            // hook 都装上了，告诉 App 侧“我活着”：设置页那个「已启用」就是看这个
+            Util.startReporting(VERSION);
         } catch (Throwable t) {
             log(Log.ERROR, TAG, "hook failed", t);
         }
@@ -165,6 +168,11 @@ public final class LyricPatchModule extends XposedModule {
 
                     hook(m).intercept(chain -> {
                         Object result = chain.proceed();
+                        // ROM 自带源也可能返回“纯音乐，请欣赏”这种占位词
+                        if (LyricSourceProxy.shouldHideInstrumental(result)) {
+                            log(Log.DEBUG, TAG, "source(" + type.getSimpleName() + "): 纯音乐，不出词", null);
+                            return LyricSourceProxy.blankForRom();
+                        }
                         if (LyricSourceProxy.resultHasWords(result)) return result;
 
                         List<?> args = chain.getArgs();

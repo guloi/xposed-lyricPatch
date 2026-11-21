@@ -45,7 +45,6 @@ final class LyricScroll {
     private static Field sWords;
     private static Field sTextWidth;
     private static Field sRtl;
-    private static Field sScrollSpeed;
     private static Field sWordPos;
     private static boolean sResolved;
 
@@ -56,6 +55,8 @@ final class LyricScroll {
 
     private static long sConfAt;
     private static boolean sConfOn = true;
+    /** 跟随：先定住，唱到快贴右边才跟着挪（不一直滚，更像 ROM） */
+    private static boolean sConfFollow = true;
     private static int sConfSpeed;
     private static int sConfDelay = 500;
 
@@ -149,17 +150,38 @@ final class LyricScroll {
         }
 
         float maxScroll = textWidth - width;
-        // 滚多快由「这一行自己要唱多久」决定：整段滚动刚好在句尾铺满，
-        // 而不是一上来就按 4px/10ms 冲到底（那样句首秒就没）
         long span = spanMs(words);
-        float speed = speedOf(view, maxScroll, span);
+
+        // 跟随模式：先让整行定住，等「已唱位置」快贴到右边再开始挪。
+        // 一屏能装下整行的多少，就是能定住多大比例 —— 正好在字要出屏时才动，
+        // 所以大部分时间是静的，不会从行首一直滚到尾。
+        long holdMs = 0L;
+        if (sConfFollow) {
+            float fits = width / Math.max(1f, textWidth);
+            float hold = Math.min(0.8f, Math.max(0.35f, fits));
+            holdMs = (long) (span * hold);
+        }
 
         // 还没到起播时间（默认 500ms）：这一帧不动，只在那一下把自己叫醒，
         // 省的为了一个静止画面跑 100fps
         long remaining = st.startAt + sConfDelay - now;
         if (remaining > 0) return new Scroll(0f, false, remaining);
 
-        float progress = (-remaining / (float) FRAME_MS) * speed;
+        long elapsed = -remaining;
+        if (elapsed < holdMs) {
+            // 静止阶段：等 hold 结束那一刻再叫醒自己
+            return new Scroll(0f, false, Math.max(1L, holdMs - elapsed));
+        }
+
+        float progress;
+        if (sConfSpeed > 0) {
+            // 手动定速：从开始滚的那一瞬起，每 10ms 走 sConfSpeed 像素
+            progress = ((elapsed - holdMs) / (float) FRAME_MS) * sConfSpeed;
+        } else {
+            // 自动：剩下的路程按「这一行还要唱多久」铺满，句尾刚好露出来
+            long liveMs = Math.max(1L, span - holdMs);
+            progress = (elapsed - holdMs) / (float) liveMs * maxScroll;
+        }
         boolean done = progress >= maxScroll;
         if (done) progress = maxScroll;
 
@@ -176,6 +198,7 @@ final class LyricScroll {
         if (sConfAt != 0 && now - sConfAt < 3000L) return;
         sConfAt = now;
         sConfOn = Util.confBool("word_scroll", true);
+        sConfFollow = Util.confBool("word_scroll_follow", true);
         sConfSpeed = Math.max(0, Util.confInt("word_scroll_speed", 0));
         sConfDelay = Math.max(0, Util.confInt("word_scroll_delay", 500));
     }
@@ -188,7 +211,6 @@ final class LyricScroll {
         sWords = find(type, "mWordTiming");
         sTextWidth = find(type, "mTextWidth");
         sRtl = find(type, "mTextRtl");
-        sScrollSpeed = find(type, "mScrollSpeed");
         sWordPos = find(type, "mWordPositionMs");   // 可选的：拿不到就当 0
 
         boolean ok = sText != null && sWords != null && sTextWidth != null && sRtl != null;
@@ -230,18 +252,6 @@ final class LyricScroll {
             }
         }
         return 0f;
-    }
-
-    /**
-     * 滚动手感。
-     *  - word_scroll_speed 写了正数：就按那个固定速度（px / 10ms），老行为
-     *  - 默认（0）：自动 —— 把 maxScroll 铺满这一行的演唱时长，句尾刚好露出尾巴
-     */
-    private static float speedOf(View view, float maxScroll, long span) {
-        if (sConfSpeed > 0) return sConfSpeed;
-        float perFrame = maxScroll * (float) FRAME_MS / Math.max(1L, span);
-        if (perFrame <= 0f) return 1f;
-        return Math.min(12f, perFrame);   // 再快也不超 12px/10ms，否则一样看不到字
     }
 
     /** 这一行大概唱多久（词级时间直接给了），拿不到就当 4 秒 */

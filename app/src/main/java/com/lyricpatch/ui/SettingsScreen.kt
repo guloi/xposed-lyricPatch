@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -43,6 +44,9 @@ private class UiState {
     var loaded by mutableStateOf(false)
     var busy by mutableStateOf(false)
     var dirty by mutableStateOf(false)
+
+    /** null = 还没探到；true = hook 在响应；false = 没挂上 */
+    var active by mutableStateOf<Boolean?>(null)
 }
 
 private fun String.toBooleanLoose(def: Boolean): Boolean = when (trim().lowercase()) {
@@ -54,7 +58,8 @@ private fun String.toBooleanLoose(def: Boolean): Boolean = when (trim().lowercas
 private fun UiState.raw(key: String): String = values[key] ?: ConfigStore.DEFAULTS[key].orEmpty()
 
 private fun UiState.flag(key: String): Boolean {
-    val def = (ConfigStore.DEFAULTS[key] ?: "").toBooleanLoose(true)
+    // 没登记的键一律当 false：以前这里回退 true，害得 hide_translation_always 看着像开着
+    val def = (ConfigStore.DEFAULTS[key] ?: "false").toBooleanLoose(false)
     return raw(key).toBooleanLoose(def)
 }
 
@@ -87,6 +92,14 @@ fun SettingsScreen() {
         state.loaded = true
     }
 
+    // 每 10 秒探一次：在 LSPosed 里刚启用、或重启过 SystemUI，界面会自动变过来
+    LaunchedEffect(Unit) {
+        while (true) {
+            state.active = ConfigStore.isActive(context)
+            delay(10_000L)
+        }
+    }
+
     val onReload: () -> Unit = {
         scope.launch {
             state.busy = true
@@ -95,6 +108,7 @@ fun SettingsScreen() {
             state.values.putAll(result.values)
             state.path = result.path
             state.dirty = false
+            state.active = ConfigStore.isActive(context)
             state.busy = false
             snackbar.showSnackbar("已重新读取")
         }
@@ -110,7 +124,7 @@ fun SettingsScreen() {
                 if (result.ok) {
                     state.dirty = false
                     state.path = result.path
-                    snackbar.showSnackbar("已写入 ${result.path}")
+                    snackbar.showSnackbar("已保存")
                 } else {
                     snackbar.showSnackbar("保存失败：${result.message}")
                 }
@@ -123,7 +137,7 @@ fun SettingsScreen() {
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(hostState = snackbar) },
         bottomBar = {
-            SaveBar(busy = state.busy, dirty = state.dirty, onReload = onReload, onSave = onSave)
+            SaveBar(busy = state.busy, onReload = onReload, onSave = onSave)
         },
     ) { inner ->
         if (!state.loaded) {
@@ -141,6 +155,8 @@ fun SettingsScreen() {
                 Hero(
                     version = version,
                     dirty = state.dirty,
+                    active = state.active,
+                    path = state.path ?: ConfigStore.file(context).absolutePath,
                     onReload = onReload,
                 )
             }
@@ -151,31 +167,35 @@ fun SettingsScreen() {
                     delayMs = state.num("word_scroll_delay", 500),
                 )
             }
-            item { SectionHeader("数据源", "按顺序尝试，第一个出词的就用它") }
+            item { SectionHeader("数据源", "按顺序匹配，使用第一个返回歌词的源") }
             item {
                 SettingsCard {
                     FieldRow(
                         label = "providers",
                         value = state.raw("providers"),
-                        supporting = "netease / qq / kugou / lrclib，也能直接写 https:// 自建源",
+                        supporting = "netease / qq / kugou / lrclib，或 https:// 自建源",
                         onChange = { state.put("providers", it) },
                     )
                     PresetChips(current = state.raw("providers")) { state.put("providers", it) }
+                    RowDivider()
+                    SwitchRow(
+                        title = "hide_instrumental",
+                        subtitle = "识别到纯音乐时不显示歌词",
+                        checked = state.flag("hide_instrumental"),
+                        onCheckedChange = { state.putFlag("hide_instrumental", it) },
+                    )
                 }
             }
             item {
-                CardNote(
-                    "SystemUI 设置里「状态栏歌词源」填了地址时，会先问它（能保住 yrc 逐字），" +
-                        "再回落到上面的顺序。",
-                )
+                CardNote("「状态栏歌词源」优先，未命中时按上方顺序。")
             }
 
-            item { SectionHeader("翻译", "第二行显示什么，全在这里决定") }
+            item { SectionHeader("翻译", "控制第二行显示内容") }
             item {
                 SettingsCard {
                     SwitchRow(
                         title = "translation",
-                        subtitle = "关掉就完全不请求翻译，只要原文",
+                        subtitle = "关闭后不请求翻译",
                         checked = state.flag("translation"),
                         onCheckedChange = { state.putFlag("translation", it) },
                     )
@@ -183,13 +203,13 @@ fun SettingsScreen() {
                     FieldRow(
                         label = "translation_providers",
                         value = state.raw("translation_providers"),
-                        supporting = "主源没带翻译时单独再要一份：netease / qq / http(s)",
+                        supporting = "主源无译文时按此顺序获取：netease / qq / http(s)",
                         onChange = { state.put("translation_providers", it) },
                     )
                     RowDivider()
                     ChoiceRow(
                         title = "machine_translation",
-                        subtitle = "ROM 自带的机翻优先级，默认跟它走",
+                        subtitle = "ROM 自带机翻的使用策略",
                         options = MACHINE_MODES,
                         selected = state.raw("machine_translation"),
                         onSelect = { state.put("machine_translation", it) },
@@ -197,75 +217,75 @@ fun SettingsScreen() {
                     RowDivider()
                     SwitchRow(
                         title = "hide_empty_translation",
-                        subtitle = "这一行没翻译就干脆不显示副标题，避开残影",
+                        subtitle = "该行无译文时隐藏副标题",
                         checked = state.flag("hide_empty_translation"),
                         onCheckedChange = { state.putFlag("hide_empty_translation", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "skip_translation_for_chinese",
-                        subtitle = "中文歌词不去要翻译，避开同名错贴",
+                        subtitle = "中文歌词不请求翻译",
                         checked = state.flag("skip_translation_for_chinese"),
                         onCheckedChange = { state.putFlag("skip_translation_for_chinese", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "hide_translation_always",
-                        subtitle = "核弹开关：任何翻译都不显示，只排障时用",
+                        subtitle = "隐藏所有译文，仅用于排查",
                         checked = state.flag("hide_translation_always"),
                         onCheckedChange = { state.putFlag("hide_translation_always", it) },
                     )
                 }
             }
 
-            item { SectionHeader("逐字", "word timing 从哪来、要不要补") }
+            item { SectionHeader("逐字", "逐字来源与补充方式") }
             item {
                 SettingsCard {
                     SwitchRow(
                         title = "parse_word_formats",
-                        subtitle = "识别增强 LRC / Lyricify Syllable，转成 yrc",
+                        subtitle = "解析增强 LRC 与 Lyricify Syllable 格式",
                         checked = state.flag("parse_word_formats"),
                         onCheckedChange = { state.putFlag("parse_word_formats", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "kugou_word_timing",
-                        subtitle = "没逐字时去酷狗要真逐字（KRC）",
+                        subtitle = "缺少逐字时从酷狗获取 KRC 逐字",
                         checked = state.flag("kugou_word_timing"),
                         onCheckedChange = { state.putFlag("kugou_word_timing", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "estimate_word_timing",
-                        subtitle = "本地按字数估算一份，秒出但也只是估算",
+                        subtitle = "本地按字符估算逐字时间",
                         checked = state.flag("estimate_word_timing"),
                         onCheckedChange = { state.putFlag("estimate_word_timing", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "prefer_network_word_timing",
-                        subtitle = "宁愿等联网真逐字，也不用估算的",
+                        subtitle = "优先使用联网逐字，响应变慢",
                         checked = state.flag("prefer_network_word_timing"),
                         onCheckedChange = { state.putFlag("prefer_network_word_timing", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "synth_word_timing",
-                        subtitle = "用行时间轴硬凑一份逐字（节奏会不准）",
+                        subtitle = "按行时间轴合成逐字，节奏可能不准",
                         checked = state.flag("synth_word_timing"),
                         onCheckedChange = { state.putFlag("synth_word_timing", it) },
                     )
                     RowDivider()
                     SwitchRow(
                         title = "auto_word_timing",
-                        subtitle = "最后一道兑底：发现当前歌词没逐字就自己补",
+                        subtitle = "当前歌词缺少逐字时自动补充",
                         checked = state.flag("auto_word_timing"),
                         onCheckedChange = { state.putFlag("auto_word_timing", it) },
                     )
                     RowDivider()
                     SliderRow(
                         title = "word_timing_max_chars",
-                        subtitle = "超过这个字数就不做估算（0 = 不限）",
+                        subtitle = "超过该字数不估算，0 为不限",
                         value = state.num("word_timing_max_chars", 0),
                         range = 0f..40f,
                         steps = 39,
@@ -275,19 +295,26 @@ fun SettingsScreen() {
                 }
             }
 
-            item { SectionHeader("长句滚动", "4.13 起逐字模式也有跑马灯了") }
+            item { SectionHeader("长句滚动", "处理超出控件宽度的歌词行") }
             item {
                 SettingsCard {
                     SwitchRow(
                         title = "word_scroll",
-                        subtitle = "逐字自绘不放跑马灯，这一项会把整行平移补上",
+                        subtitle = "为逐字模式补充横向滚动",
                         checked = state.flag("word_scroll"),
                         onCheckedChange = { state.putFlag("word_scroll", it) },
                     )
                     RowDivider()
+                    SwitchRow(
+                        title = "word_scroll_follow",
+                        subtitle = "接近右边缘才滚动；关闭则从行首开始",
+                        checked = state.flag("word_scroll_follow"),
+                        onCheckedChange = { state.putFlag("word_scroll_follow", it) },
+                    )
+                    RowDivider()
                     SliderRow(
                         title = "word_scroll_speed",
-                        subtitle = "0 = 自动：铺满这一行的演唱时长；填数字 = 固定 px/10ms",
+                        subtitle = "0 为自动；其余为 px/10ms",
                         value = state.num("word_scroll_speed", 0),
                         range = 0f..16f,
                         steps = 15,
@@ -298,7 +325,7 @@ fun SettingsScreen() {
                     val delayMs = state.num("word_scroll_delay", 500)
                     SliderRow(
                         title = "word_scroll_delay",
-                        subtitle = "开滚前先停多久，让人看完句子开头",
+                        subtitle = "开始滚动前的停留时间",
                         value = delayMs / 100,
                         range = 0f..20f,
                         steps = 19,
@@ -308,26 +335,29 @@ fun SettingsScreen() {
                 }
             }
             item {
-                CardNote(
-                    "ROM 的逐字分支把文本钉在 x=0，完全不看 mOffset，所以句子比控件宽时右半边就没了。" +
-                        "模块在 onDraw 外套一层 canvas.translate，按 ROM 跑马灯的节奏（默认 500ms + 4px/10ms）平移。",
-                )
+                CardNote("ROM 的逐字绘制不会滚动，超宽部分会被裁切。开启跟随后先静止，接近右边缘再滚动；关闭则从行首滚动。")
             }
 
-            item { SectionHeader("应用过滤", "白名单 / 黑名单二选一") }
+            item { SectionHeader("应用过滤", "白名单与黑名单二选一") }
             item {
                 SettingsCard {
+                    val white = state.raw("app_whitelist")
+                    val black = state.raw("app_blacklist")
+                    // 白名单非空时黑名单失效，反之亦然：失效且自身为空的那个置灰；
+                    // 自身有内容时仍保持可编辑，否则没法清空
                     FieldRow(
                         label = "app_whitelist",
-                        value = state.raw("app_whitelist"),
-                        supporting = "只给这些 App 补词，逗号分隔包名；支持前缀匹配",
+                        value = white,
+                        supporting = "仅对这些包名生效，逗号分隔",
+                        enabled = !(black.isNotBlank() && white.isBlank()),
                         onChange = { state.put("app_whitelist", it) },
                     )
                     RowDivider()
                     FieldRow(
                         label = "app_blacklist",
-                        value = state.raw("app_blacklist"),
-                        supporting = "这些 App 一律跳过（白名单非空时它不生效）",
+                        value = black,
+                        supporting = "跳过这些包名；白名单非空时无效",
+                        enabled = !(white.isNotBlank() && black.isBlank()),
                         onChange = { state.put("app_blacklist", it) },
                     )
                 }
@@ -342,7 +372,7 @@ fun SettingsScreen() {
                     }
                     ChoiceRow(
                         title = "log_level",
-                        subtitle = "info 只报关键事件；debug 才出每次取词/注入的细节，verbose 连每帧都打",
+                        subtitle = "info 仅关键事件；debug 含取词细节；verbose 含每帧",
                         options = LOG_LEVELS,
                         selected = currentLevel,
                         onSelect = { state.put("log_level", it) },
@@ -356,14 +386,11 @@ fun SettingsScreen() {
             }
 
             item {
-                CardNote(
-                    "改完保存就会生效（模块按 mtime 热读，不用重启 SystemUI）；" +
-                        "只有第一次启用模块或换 SystemUI 版本时，才需要重启一次 SystemUI。",
-                )
+                CardNote("保存后立即生效，无需重启 SystemUI。首次启用模块或更换 SystemUI 版本后需重启一次。")
             }
             item {
                 Text(
-                    "LyricPatch v$version · 设置界面 4.14+",
+                    "LyricPatch v$version",
                     modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 4.dp),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.outline,
@@ -375,9 +402,9 @@ fun SettingsScreen() {
 }
 
 private val MACHINE_MODES = listOf(
-    "auto" to "ROM 原样",
+    "auto" to "跟随 ROM",
     "source" to "源优先",
-    "off" to "不机翻",
+    "off" to "禁用机翻",
 )
 
 private val LOG_LEVELS = listOf(
@@ -391,6 +418,8 @@ private val LOG_LEVELS = listOf(
 private fun Hero(
     version: String,
     dirty: Boolean,
+    active: Boolean?,
+    path: String,
     onReload: () -> Unit,
 ) {
     val gradient = Brush.linearGradient(
@@ -410,7 +439,7 @@ private fun Hero(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "SystemUI 状态栏歌词 · 补源 / 逐字 / 翻译 / 长句滚动",
+            "SystemUI 状态栏歌词补源与逐字",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f),
         )
@@ -418,6 +447,14 @@ private fun Hero(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("v$version")
             Pill(if (dirty) "未保存" else "已同步")
+            Pill(
+                text = when (active) {
+                    true -> "已启用"
+                    false -> "未启用"
+                    null -> "检测中…"
+                },
+                strong = active == true,
+            )
         }
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -425,16 +462,19 @@ private fun Hero(
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "配置存在模块内部存储，SystemUI 通过 provider 读，不需要 root",
-            style = MaterialTheme.typography.labelMedium,
+            if (active == true) path else "模块未启用",
+            style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
         )
     }
 }
 
 @Composable
-private fun Pill(text: String) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f)) {
+private fun Pill(text: String, strong: Boolean = false) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = if (strong) 0.32f else 0.18f),
+    ) {
         Text(
             text,
             style = MaterialTheme.typography.labelMedium,
@@ -460,7 +500,7 @@ private fun HeroAction(text: String, onClick: () -> Unit) {
     }
 }
 
-/** 模拟一下状态栏那一行：高亮按播放位置往前爬 */
+/** 预览：高亮随播放进度推进 */
 @Composable
 private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
     val transition = rememberInfiniteTransition(label = "preview")
@@ -474,7 +514,7 @@ private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
         label = "sing",
     )
 
-    val line = "这是一句故意写得很长的歌词，用来看看跑马灯和逐字高亮"
+    val line = "这是一句较长的歌词，用于预览滚动与逐字高亮"
     val sung = (phase * line.length).roundToInt().coerceIn(0, line.length)
     val accent = MaterialTheme.colorScheme.primary
     val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
@@ -513,10 +553,10 @@ private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
             Spacer(Modifier.height(14.dp))
             Text(
                 if (scrollOn) {
-                    val speedText = if (speed <= 0) "按这一行的时长自动铺满" else "每 10ms ${speed}px"
-                    "长句先停 ${delayMs}ms，然后$speedText，句尾刚好露出来"
+                    val speedText = if (speed <= 0) "自动" else "每 10ms ${speed}px"
+                    "停留 ${delayMs}ms 后滚动，$speedText"
                 } else {
-                    "word_scroll 关掉了：这句话在状态栏上只能看到前半段"
+                    "未开启长句滚动，超宽部分会被裁切"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -601,15 +641,18 @@ private fun FieldRow(
     label: String,
     value: String,
     supporting: String?,
+    enabled: Boolean = true,
     onChange: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
         OutlinedTextField(
             value = value,
-            onValueChange = onChange,
+            // 这些键都是逗号/空格分隔的一行参数，粘贴带进来的换行直接吃掉
+            onValueChange = { raw -> onChange(raw.replace("\n", "").replace("\r", "")) },
             modifier = Modifier.fillMaxWidth(),
             label = { Text(label) },
             singleLine = true,
+            enabled = enabled,
             shape = MaterialTheme.shapes.medium,
             supportingText = if (supporting != null) {
                 { Text(supporting) }
@@ -624,7 +667,7 @@ private fun FieldRow(
 private fun PresetChips(current: String, onPick: (String) -> Unit) {
     val presets = listOf(
         "网易云+LRCLIB" to "netease,lrclib",
-        "三家全开" to "netease,qq,kugou,lrclib",
+        "网易云+酷狗+LRCLIB" to "netease,qq,kugou,lrclib",
         "酷狗逐字" to "kugou",
     )
     Row(
@@ -744,7 +787,6 @@ private fun InfoRow(title: String, value: String) {
 @Composable
 private fun SaveBar(
     busy: Boolean,
-    dirty: Boolean,
     onReload: () -> Unit,
     onSave: () -> Unit,
 ) {
@@ -755,7 +797,7 @@ private fun SaveBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedButton(onClick = onReload, enabled = !busy, shape = CircleShape) {
-                Text("重读")
+                Text("重新读取")
             }
             Spacer(Modifier.width(12.dp))
             Button(
@@ -771,7 +813,7 @@ private fun SaveBar(
                         strokeWidth = 2.dp,
                     )
                 } else {
-                    Text(if (dirty) "保存并生效" else "保存")
+                    Text("保存")
                 }
             }
         }

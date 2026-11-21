@@ -40,6 +40,9 @@ public final class Util {
     /** 配置变了靠广播通知；这个 TTL 只是兜底（万一广播没收到） */
     private static final long CONF_TTL = 300000L;
     private static final String ACTION_CONF_CHANGED = "com.lyricpatch.CONFIG_CHANGED";
+    /** 界面发这个 ping，hook 侧回写一次报活（用来显示“已启用”） */
+    private static final String ACTION_PING = "com.lyricpatch.PING";
+    private static volatile String sExpVersion = "";
     private static volatile boolean sWatching;
     private static final Object CONF_LOCK = new Object();
     private static final Properties EMPTY_CONF = new Properties();
@@ -282,9 +285,13 @@ public final class Util {
         sWatching = true;
         try {
             android.content.IntentFilter filter = new android.content.IntentFilter(ACTION_CONF_CHANGED);
+            filter.addAction(ACTION_PING);
             android.content.BroadcastReceiver receiver = new android.content.BroadcastReceiver() {
                 @Override
                 public void onReceive(Context c, android.content.Intent intent) {
+                    if (intent != null && ACTION_PING.equals(intent.getAction())) {
+                        reportAlive();
+                    }
                     sConfAt = 0L;          // 0 = 作废，下次读重新拉
                     scheduleFetch();
                 }
@@ -305,6 +312,29 @@ public final class Util {
      *  - 后台线程（取词那一条）且还没快照：直接同步取一次，不卡 UI
      *  - 主线程（onDraw 里问 word_scroll）：绝不阻塞，先用旧快照 + 排一个后台刷新
      */
+    /**
+     * 模块在 hook 装好后调一次：记住版本号 + 注册 ping 监听（早于第一次取词，界面一开就能问到）。
+     * 这里**不主动上报**：那会在每次 SystemUI 启动时把 App 进程拉起来，只为记一个时间戳；
+     * 界面打开时会发 ping，收到再回写就够了。
+     */
+    static void startReporting(String version) {
+        sExpVersion = version == null ? "" : version;
+        ensureWatcher();
+    }
+
+    /** 告诉模块 App：SystemUI 里的 hook 还活着；界面拿这个显示“已启用” */
+    static void reportAlive() {
+        Context ctx = appContext();
+        if (ctx == null) return;
+        try {
+            Bundle extras = new Bundle();
+            extras.putString("version", sExpVersion);
+            ctx.getContentResolver().call(CONF_URI, "report", null, extras);
+        } catch (Throwable ignored) {
+            // 界面收不到最多显示未启用，不影响出词
+        }
+    }
+
     private static Properties conf() {
         ensureWatcher();
         Properties snapshot = sConf;

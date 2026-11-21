@@ -2,6 +2,8 @@ package com.lyricpatch.ui
 
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
+import kotlinx.coroutines.delay
 import java.io.File
 
 /**
@@ -17,20 +19,39 @@ object ConfigStore {
     const val FILE_NAME = "lyricpatch.conf"
     const val AUTHORITY = "com.lyricpatch.config"
     const val METHOD_READ = "read"
+    const val METHOD_REPORT = "report"
+    const val METHOD_STATUS = "status"
 
     /** 保存后拿这个广播叫醒 SystemUI 侧的 hook，省得为了配置去轮询 */
     const val ACTION_CONF_CHANGED = "com.lyricpatch.CONFIG_CHANGED"
+
+    /** 探测 hook 是否还活着：发 ping，hook 侧会回写一次报活 */
+    const val ACTION_PING = "com.lyricpatch.PING"
     const val SYSTEMUI_PACKAGE = "com.android.systemui"
+
+    /**
+     * 发 ping → 等一下 → 看有没有回写。
+     * 回写的时间戳必须晚于发 ping 的时刻，才算“真的在”。
+     */
+    suspend fun isActive(context: Context, waitMs: Long = 450L): Boolean {
+        val start = SystemClock.elapsedRealtime()
+        runCatching {
+            context.sendBroadcast(Intent(ACTION_PING).setPackage(SYSTEMUI_PACKAGE))
+        }
+        delay(waitMs)
+        return ConfigProvider.lastReportAt >= start
+    }
 
     /** 写回文件时的顺序，和 README 的分组一致 */
     val ORDER = listOf(
         "providers",
+        "hide_instrumental",
         "translation", "translation_providers", "machine_translation",
         "hide_empty_translation", "hide_translation_always", "skip_translation_for_chinese",
         "parse_word_formats", "kugou_word_timing", "estimate_word_timing",
         "prefer_network_word_timing", "synth_word_timing", "auto_word_timing",
         "word_timing_max_chars",
-        "word_scroll", "word_scroll_speed", "word_scroll_delay",
+        "word_scroll", "word_scroll_follow", "word_scroll_speed", "word_scroll_delay",
         "app_whitelist", "app_blacklist",
         "log_level", "debug_log",
     )
@@ -38,10 +59,12 @@ object ConfigStore {
     /** 和模块代码里的默认值保持一致 */
     val DEFAULTS: Map<String, String> = linkedMapOf(
         "providers" to "netease,lrclib",
+        "hide_instrumental" to "true",
         "translation" to "true",
         "translation_providers" to "netease",
         "machine_translation" to "auto",
         "hide_empty_translation" to "true",
+        "hide_translation_always" to "false",
         "skip_translation_for_chinese" to "true",
         "parse_word_formats" to "true",
         "kugou_word_timing" to "true",
@@ -51,6 +74,7 @@ object ConfigStore {
         "auto_word_timing" to "true",
         "word_timing_max_chars" to "0",
         "word_scroll" to "true",
+        "word_scroll_follow" to "true",
         "word_scroll_speed" to "0",
         "word_scroll_delay" to "500",
         "debug_log" to "false",

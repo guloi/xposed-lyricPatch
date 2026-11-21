@@ -5,12 +5,14 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 
 /**
- * 模块 App → SystemUI 的只读取配置口。
+ * 模块 App ↔ SystemUI 的配置通道，另外兼一个“心跳”接口。
  *
- * 配置存在本 App 的内部存储里，SystemUI 是另一个进程、另一个 uid，
- * 直接读文件会被权限和 SELinux 拦住，走 ContentProvider 就没这个麻烦。
+ *  - read   ：SystemUI 侧的 hook 来拿配置（内部存储是私有的，直接读文件会被权限和 SELinux 拦住）
+ *  - report ：hook 装上了 / 收到 ping 时回写一次，界面拿它显示“已启用”
+ *  - status ：（可选）读当前报活信息
  *
  * 内容只有歌词源 / 开关，不含隐私，所以没设权限（设了 SystemUI 也拿不到）。
  */
@@ -20,16 +22,29 @@ class ConfigProvider : ContentProvider() {
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
         val reply = Bundle()
-        if (method != ConfigStore.METHOD_READ) {
-            reply.putBoolean("ok", false)
-            return reply
+        when (method) {
+            ConfigStore.METHOD_READ -> read(reply)
+            ConfigStore.METHOD_REPORT -> {
+                lastReportAt = SystemClock.elapsedRealtime()
+                lastReportVersion = extras?.getString("version").orEmpty()
+                reply.putBoolean("ok", true)
+            }
+            ConfigStore.METHOD_STATUS -> {
+                reply.putBoolean("ok", true)
+                reply.putLong("at", lastReportAt)
+                reply.putString("version", lastReportVersion)
+            }
+            else -> reply.putBoolean("ok", false)
         }
+        return reply
+    }
+
+    private fun read(reply: Bundle) {
         val ctx = context
         if (ctx == null) {
             reply.putBoolean("ok", false)
-            return reply
+            return
         }
-
         val target = ConfigStore.file(ctx)
         val exists = target.isFile
         val text = if (exists) {
@@ -37,11 +52,9 @@ class ConfigProvider : ContentProvider() {
         } else {
             ""
         }
-
         reply.putBoolean("ok", true)
         reply.putString("text", text)
         reply.putLong("mtime", if (exists) target.lastModified() else 0L)
-        return reply
     }
 
     override fun query(
@@ -64,4 +77,15 @@ class ConfigProvider : ContentProvider() {
         selection: String?,
         selectionArgs: Array<out String>?,
     ): Int = 0
+
+    companion object {
+        /** hook 侧最近一次报活的时间（elapsedRealtime，同一台机器可比） */
+        @Volatile
+        var lastReportAt: Long = 0L
+            private set
+
+        @Volatile
+        var lastReportVersion: String = ""
+            private set
+    }
 }
