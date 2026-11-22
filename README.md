@@ -59,6 +59,8 @@ targetSdk 37 会强制 edge-to-edge，设置页已经用 `enableEdgeToEdge()` + 
 1. 装 APK
 2. LSPosed 里找到「歌词补丁」→ 启用 → 勾选 **系统界面（com.android.systemui）**
 3. 重启 SystemUI（或重启手机）
+   - 之后改**代码**只要装新 APK：`module.prop` 里声明了 `autoHotReload=true`，
+     框架会直接热更新，不用再重启系统界面；改配置更是即时生效
 4. 确认总开关：`adb shell settings get secure status_bar_show_lyric` → 需要是 `1`
 5. 「歌词源」弹窗建议**留空**（这样内置 Apple/LrcLib 仍作垫底）
 

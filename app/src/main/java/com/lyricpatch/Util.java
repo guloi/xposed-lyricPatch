@@ -46,6 +46,8 @@ public final class Util {
     private static final String ACTION_PING = "com.lyricpatch.PING";
     private static volatile String sExpVersion = "";
     private static volatile boolean sWatching;
+    /** 已注册的配置/PING 接收器：热更新前要摘掉，否则旧代码一直被系统引用着 */
+    private static volatile android.content.BroadcastReceiver sWatcher;
     private static final Object CONF_LOCK = new Object();
     private static final Properties EMPTY_CONF = new Properties();
     private static final AtomicBoolean sFetching = new AtomicBoolean();
@@ -298,14 +300,35 @@ public final class Util {
                     scheduleFetch();
                 }
             };
+            sWatcher = receiver;
             if (android.os.Build.VERSION.SDK_INT >= 33) {
                 ctx.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
             } else {
                 ctx.registerReceiver(receiver, filter);
             }
         } catch (Throwable t) {
+            sWatcher = null;
             sWatching = false;         // 下次再试
             logw("register conf watcher failed", t);
+        }
+    }
+
+    /**
+     * 热更新前（旧代码里）调一次：把广播接收器摘掉、快照丢掉。
+     * 不摘也能跑，只是旧一代会被系统一直引用着，热更新换不下去。
+     */
+    static void stopReporting() {
+        android.content.BroadcastReceiver receiver = sWatcher;
+        sWatcher = null;
+        sWatching = false;
+        sConf = null;
+        sConfAt = 0L;
+        Context ctx = sContext;
+        if (receiver == null || ctx == null) return;
+        try {
+            ctx.unregisterReceiver(receiver);
+        } catch (Throwable ignored) {
+            // 没注册成功或已经被系统摘掉了都无所谓
         }
     }
 

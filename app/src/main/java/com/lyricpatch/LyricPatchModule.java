@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.widget.TextSwitcher;
 import android.widget.TextView;
 
+import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedModule;
 import io.github.libxposed.api.XposedModuleInterface;
 
@@ -35,7 +37,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.67";
+    private static final String VERSION = "4.68";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -61,6 +63,13 @@ public final class LyricPatchModule extends XposedModule {
 
     private static boolean sLoggedMiss;
 
+    /** 本代装上的钩子，key 是钩住的方法本身：热更新时用它和旧句柄对账 */
+    private static final Map<Executable, XposedInterface.HookHandle> sHooks = new HashMap<>();
+    /** 安装期间临时借用：上一代留下的句柄，按 executable 取走一个少一个 */
+    private static Map<Executable, XposedInterface.HookHandle> sOldHooks;
+    private static ClassLoader sClassLoader;
+    private static volatile boolean sInstalled;
+
     @Override
     public void onModuleLoaded(XposedModuleInterface.ModuleLoadedParam param) {
         log(Log.INFO, TAG, "module loaded v" + VERSION, null);
@@ -79,17 +88,28 @@ public final class LyricPatchModule extends XposedModule {
                 return;
             }
 
-            Class<?> factory;
+            // 不是 SystemUI 就安静跳过（只探测，不初始化）
             try {
-                factory = Class.forName(CLS_FACTORY, false, cl);
+                Class.forName(CLS_FACTORY, false, cl);
             } catch (Throwable notSystemUi) {
-                return;   // 不是 SystemUI，安静跳过
+                return;
             }
 
+            sClassLoader = cl;
+            install(cl, null);
+        } catch (Throwable t) {
+            log(Log.ERROR, TAG, "hook failed", t);
+        }
+    }
+
+    /** LyricSourceFactory#create：把我们的源插到最前面 */
+    private void hookFactorySource(ClassLoader cl) {
+        try {
+            Class<?> factory = Class.forName(CLS_FACTORY, false, cl);
             Method create = factory.getDeclaredMethod("create", String.class);
             final Object source = LyricSourceProxy.get(cl);
 
-            hook(create).intercept(chain -> {
+            mount(create, chain -> {
                 String setting = null;
                 List<?> args = chain.getArgs();
                 if (args != null && !args.isEmpty() && args.get(0) instanceof CharSequence) {
@@ -128,20 +148,198 @@ public final class LyricPatchModule extends XposedModule {
             });
 
             log(Log.INFO, TAG, "hooked " + CLS_FACTORY + "#create", null);
+        } catch (Throwable t) {
+            log(Log.WARN, TAG, "hook LyricSourceFactory failed", t);
+        }
+    }
 
+    /**
+     * 装上全部钩子。热更新时框架会把上一代的句柄交回来（oldHandles）：
+     * 同一个方法直接 replaceHook 原子替换，旧钩子不会先消失、也没有空窗；
+     * 上一代有、这一代不再需要的，最后统一 unhook。
+     */
+    private synchronized void install(ClassLoader cl, List<XposedInterface.HookHandle> oldHandles) {
+        // 同一代里被重复调用就别再挂一遍，不然同一个方法会有两条 hook 链
+        if (oldHandles == null && sInstalled) return;
+
+        Map<Executable, XposedInterface.HookHandle> olds = new HashMap<>();
+        if (oldHandles != null) {
+            for (XposedInterface.HookHandle h : oldHandles) {
+                if (h == null) continue;
+                try {
+                    olds.put(h.getExecutable(), h);
+                } catch (Throwable ignored) {
+                    // 拿不到 executable 的句柄就留着，框架下次自己处理
+                }
+            }
+        }
+
+        sHooks.clear();
+        sOldHooks = olds;
+        try {
+            hookFactorySource(cl);
             hookConcreteSources(cl);
             hookStopLyric(cl);
             hookHolderText(cl);
             hookTranslator(cl);
             hookWordScroll(cl);
+        } finally {
+            sOldHooks = null;
+        }
 
-            // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
-            log(Log.INFO, TAG, "ready: " + Util.summary(), null);
+        // 这一代不再需要的旧钩子
+        for (XposedInterface.HookHandle h : olds.values()) {
+            try {
+                h.unhook();
+            } catch (Throwable ignored) {
+                // unhook 幂等，失败也不影响出词
+            }
+        }
 
-            // hook 都装上了，告诉 App 侧“我活着”：设置页那个「已启用」就是看这个
-            Util.startReporting(VERSION);
-        } catch (Throwable t) {
-            log(Log.ERROR, TAG, "hook failed", t);
+        sInstalled = true;
+
+        // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
+        log(Log.INFO, TAG, "ready: " + Util.summary(), null);
+
+        // hook 都装上了，告诉 App 侧“我活着”：设置页那个「已启用」就是看这个
+        Util.startReporting(VERSION);
+    }
+
+    /**
+     * 挂一个钩子。热更新时如果这个方法上一代已经钩过，优先 replaceHook：
+     * 保留原来的优先级和 id，调用链里不会出现“旧的没了新的还没上”的空窗。
+     */
+    private void mount(Executable origin, XposedInterface.Hooker hooker) {
+        XposedInterface.HookHandle prev = sOldHooks == null ? null : sOldHooks.remove(origin);
+        XposedInterface.HookHandle handle = null;
+
+        if (prev != null) {
+            try {
+                handle = prev.replaceHook(hooker);
+                if (Util.isDebug()) {
+                    log(Log.DEBUG, TAG, "replaced " + shortName(origin), null);
+                }
+            } catch (Throwable t) {
+                log(Log.WARN, TAG, "replaceHook failed, hook again: " + shortName(origin), t);
+            }
+        }
+
+        if (handle == null) {
+            try {
+                handle = intercept(hook(origin), hooker);
+            } catch (Throwable t) {
+                log(Log.WARN, TAG, "hook failed: " + shortName(origin), t);
+                return;
+            }
+        }
+
+        if (handle != null) sHooks.put(origin, handle);
+    }
+
+    /**
+     * 装上钩子并拿回句柄。
+     * 用反射调 intercept 是为了不挑编译期签名：这个方法在不同框架版本里
+     * 有“返回 HookHandle”和“无返回值”两种声明。拿不到句柄最多是下次热更新
+     * 没法替它，不影响正常 hook。
+     */
+    private static XposedInterface.HookHandle intercept(XposedInterface.HookBuilder builder,
+                                                        XposedInterface.Hooker hooker) throws Throwable {
+        Method method = null;
+        try {
+            method = XposedInterface.HookBuilder.class.getMethod(
+                    "intercept", XposedInterface.Hooker.class);
+        } catch (Throwable ignored) {
+            // 反射不到就直接调，反正钩子得装上
+        }
+
+        if (method == null) {
+            builder.intercept(hooker);
+            return null;
+        }
+
+        try {
+            Object r = method.invoke(builder, hooker);
+            return r instanceof XposedInterface.HookHandle ? (XposedInterface.HookHandle) r : null;
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getCause() != null ? e.getCause() : e;
+        }
+    }
+
+    private static String shortName(Executable e) {
+        if (e == null) return "null";
+        return e.getDeclaringClass().getSimpleName() + "#" + e.getName();
+    }
+
+    /**
+     * 热更新：代码换了，但 package 生命周期回调不会重放，钩子得自己重新装。
+     * 上一代的句柄按方法对上（见 {@link #install}），classloader 也从句柄反推。
+     */
+    @Override
+    public void onHotReloaded(XposedModuleInterface.HotReloadedParam param) {
+        List<XposedInterface.HookHandle> old = null;
+        try {
+            old = param.getOldHookHandles();
+        } catch (Throwable ignored) {
+            // 老框架没有这个方法，下面照样能从缓存的 loader 装回去
+        }
+
+        ClassLoader cl = loaderOf(old);
+        if (cl == null) cl = sClassLoader;
+        if (cl == null) cl = appLoader();
+        if (cl == null) {
+            log(Log.ERROR, TAG, "hot reload: 拿不到 SystemUI 的 classloader，"
+                    + "旧钩子原样保留（重启系统界面可恢复）", null);
+            return;
+        }
+        sClassLoader = cl;
+
+        log(Log.INFO, TAG, "hot reloaded v" + VERSION + " (old hooks="
+                + (old == null ? 0 : old.size()) + ")", null);
+        install(cl, old);
+    }
+
+    /**
+     * 热更新前的回调（跑在<b>旧</b>代码里）。必须返回 true：
+     * 装新 APK 触发的自动热更新，只有返回 true 才会继续。
+     * 顺手把上一代的广播接收器摘掉，否则旧代码会一直挂在系统里回收不掉。
+     */
+    @Override
+    public boolean onHotReloading(XposedModuleInterface.HotReloadingParam param) {
+        log(Log.INFO, TAG, "hot reloading: v" + VERSION, null);
+        Util.stopReporting();
+        return true;
+    }
+
+    /** 旧句柄里反推 classloader：钩的都是 SystemUI 的类，随便取一个就够 */
+    private static ClassLoader loaderOf(List<XposedInterface.HookHandle> handles) {
+        if (handles == null) return null;
+        for (XposedInterface.HookHandle h : handles) {
+            if (h == null) continue;
+            try {
+                Executable e = h.getExecutable();
+                if (e == null || e.getDeclaringClass() == null) continue;
+                ClassLoader cl = e.getDeclaringClass().getClassLoader();
+                if (cl != null) return cl;
+            } catch (Throwable ignored) {
+                // 试下一个
+            }
+        }
+        return null;
+    }
+
+    /** 实在没有旧句柄时的兜底：SystemUI 进程里的 Application 就是它自己的 loader */
+    private static ClassLoader appLoader() {
+        try {
+            Class<?> at = Class.forName("android.app.ActivityThread");
+            Object app = at.getDeclaredMethod("currentApplication").invoke(null);
+            if (app instanceof Context) return ((Context) app).getClassLoader();
+        } catch (Throwable ignored) {
+            // 下面再试线程上下文
+        }
+        try {
+            return Thread.currentThread().getContextClassLoader();
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 
@@ -167,7 +365,7 @@ public final class LyricPatchModule extends XposedModule {
                     if (!enhanced && !"fetch".equals(m.getName())) continue;
                     if (m.getParameterCount() != 1) continue;
 
-                    hook(m).intercept(chain -> {
+                    mount(m, chain -> {
                         Object result = chain.proceed();
                         // ROM 自带源也可能返回“纯音乐，请欣赏”这种占位词
                         if (LyricSourceProxy.shouldHideInstrumental(result)) {
@@ -215,7 +413,7 @@ public final class LyricPatchModule extends XposedModule {
             Class<?> type = Class.forName(CLS_LYRIC_TEXT_VIEW, false, cl);
             Method onDraw = type.getDeclaredMethod("onDraw", Canvas.class);
 
-            hook(onDraw).intercept(chain -> {
+            mount(onDraw, chain -> {
                 List<?> args = chain.getArgs();
                 Object self = chain.getThisObject();
                 if (!(self instanceof View)) return chain.proceed();
@@ -284,7 +482,7 @@ public final class LyricPatchModule extends XposedModule {
             Class<?> controller = Class.forName(CLS_CONTROLLER, false, cl);
             Method stop = controller.getDeclaredMethod("stopLyric");
 
-            hook(stop).intercept(chain -> {
+            mount(stop, chain -> {
                 Object result = chain.proceed();
                 Object self = chain.getThisObject();
                 clearSubtitle(readField(self, "mOverlayLyricViewHolder"));
@@ -411,7 +609,7 @@ public final class LyricPatchModule extends XposedModule {
                 return;
             }
 
-            hook(setter).intercept(chain -> {
+            mount(setter, chain -> {
                 List<?> args = chain.getArgs();
                 Object text = args != null && args.size() > 0 ? args.get(0) : null;
                 Object translated = args != null && args.size() > 1 ? args.get(1) : null;
@@ -463,7 +661,7 @@ public final class LyricPatchModule extends XposedModule {
                 }
             }
             if (subtitle != null) {
-                hook(subtitle).intercept(chain -> {
+                mount(subtitle, chain -> {
                     if (!Util.confBool(ConfKeys.HIDE_TRANSLATION_ALWAYS, false)) return chain.proceed();
                     List<?> args = chain.getArgs();
                     if (args == null || args.size() < 2) return chain.proceed();
@@ -727,7 +925,7 @@ public final class LyricPatchModule extends XposedModule {
             }
 
             final Method target = apply;
-            hook(target).intercept(chain -> {
+            mount(target, chain -> {
                 // 用 getArgs() 而不是 getArg(int)：不同框架版本这两个方法的可用性不一样
                 List<?> args = chain.getArgs();
                 Object lyrics = args != null && args.size() > 2 ? args.get(2) : null;
