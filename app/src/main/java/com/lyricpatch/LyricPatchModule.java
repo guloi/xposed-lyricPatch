@@ -38,7 +38,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.68";
+    private static final String VERSION = "4.69";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -204,7 +204,11 @@ public final class LyricPatchModule extends XposedModule {
         }
 
         // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
-        log(Log.INFO, TAG, "ready: " + Util.summary(), null);
+        try {
+            log(Log.INFO, TAG, "ready: " + Util.summary(), null);
+        } catch (Throwable ignored) {
+            // 配置读不到不影响出词
+        }
 
         // hook 都装上了，告诉 App 侧“我活着”：设置页那个「已启用」就是看这个
         Util.startReporting(VERSION);
@@ -281,26 +285,40 @@ public final class LyricPatchModule extends XposedModule {
      */
     @Override
     public void onHotReloaded(XposedModuleInterface.HotReloadedParam param) {
-        List<XposedInterface.HookHandle> old = null;
+        // 这个回调一抛异常就会被框架记成“热重载失败”，所以自己吃干净
         try {
-            old = param.getOldHookHandles();
-        } catch (Throwable ignored) {
-            // 老框架没有这个方法，下面照样能从缓存的 loader 装回去
-        }
+            // SystemUI 还有 :screenshot 这类子进程，歌词只在主进程里出，别去凑那个“失败”
+            String process = param.getProcessName();
+            if (process != null && process.indexOf(':') >= 0) {
+                log(Log.INFO, TAG, "hot reloaded @" + process + "：子进程，跳过", null);
+                return;
+            }
 
-        ClassLoader cl = loaderOf(old);
-        if (cl == null) cl = sClassLoader;
-        if (cl == null) cl = appLoader();
-        if (cl == null) {
-            log(Log.ERROR, TAG, "hot reload: 拿不到 SystemUI 的 classloader，"
-                    + "旧钩子原样保留（重启系统界面可恢复）", null);
-            return;
-        }
-        sClassLoader = cl;
+            List<XposedInterface.HookHandle> old = null;
+            try {
+                old = param.getOldHookHandles();
+            } catch (Throwable ignored) {
+                // 老框架没有这个方法，下面照样能从缓存的 loader 装回去
+            }
 
-        log(Log.INFO, TAG, "hot reloaded v" + VERSION + " (old hooks="
-                + (old == null ? 0 : old.size()) + ")", null);
-        install(cl, old);
+            ClassLoader cl = loaderOf(old);
+            if (cl == null) cl = sClassLoader;
+            if (cl == null) cl = appLoader();
+
+            // 勾了“所有应用”时每个进程都会进来，只有 SystemUI 这个作用域需要重装
+            if (cl == null || !isSystemUi(cl)) {
+                log(Log.INFO, TAG, "hot reloaded @" + param.getProcessName()
+                        + "：非 SystemUI，跳过", null);
+                return;
+            }
+            sClassLoader = cl;
+
+            log(Log.INFO, TAG, "hot reloaded v" + VERSION + " @" + param.getProcessName()
+                    + " (old hooks=" + (old == null ? 0 : old.size()) + ")", null);
+            install(cl, old);
+        } catch (Throwable t) {
+            log(Log.ERROR, TAG, "hot reload failed", t);
+        }
     }
 
     /**
@@ -310,9 +328,23 @@ public final class LyricPatchModule extends XposedModule {
      */
     @Override
     public boolean onHotReloading(XposedModuleInterface.HotReloadingParam param) {
-        log(Log.INFO, TAG, "hot reloading: v" + VERSION, null);
-        Util.stopReporting();
+        try {
+            log(Log.INFO, TAG, "hot reloading: v" + VERSION, null);
+            Util.stopReporting();
+        } catch (Throwable ignored) {
+            // 幂等；摘接收器失败也得让框架继续
+        }
         return true;
+    }
+
+    /** 这个进程里有没有 SystemUI 的类：作用域勾多了时用它区分要不要干活 */
+    private static boolean isSystemUi(ClassLoader cl) {
+        try {
+            Class.forName(CLS_FACTORY, false, cl);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 旧句柄里反推 classloader：钩的都是 SystemUI 的类，随便取一个就够 */
