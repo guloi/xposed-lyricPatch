@@ -14,6 +14,7 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -197,6 +198,10 @@ public final class LyricPatchModule extends XposedModule {
         }
 
         sInstalled = true;
+
+        if (Util.isDebug()) {
+            log(Log.DEBUG, TAG, "hooks=" + sHooks.size(), null);
+        }
 
         // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
         log(Log.INFO, TAG, "ready: " + Util.summary(), null);
