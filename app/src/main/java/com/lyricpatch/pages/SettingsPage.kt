@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -813,8 +814,19 @@ private fun PreviewCard(
     val line = "这是一句很长的歌词，用来预览长句滚动和逐字高亮，超出控件的部分会被裁掉"
     val sung = (phase * line.length).roundToInt().coerceIn(0, line.length)
 
-    var textPx by remember { mutableStateOf(0f) }
     var boxPx by remember { mutableStateOf(0f) }
+    val measurer = rememberTextMeasurer()
+    val textStyle = MaterialTheme.typography.bodyMedium
+    // 关键：用无约束测量拿整行真实宽度。
+    // onTextLayout 给的 size.width 是被可用宽度裁过的，算出来永远“没超宽”，于是怎么都不滚
+    val textPx = remember(line, textStyle, measurer) {
+        measurer.measure(
+            text = AnnotatedString(line),
+            style = textStyle,
+            maxLines = 1,
+            softWrap = false,
+        ).size.width.toFloat()
+    }
 
     // 可滚距离；文本没超宽就是 0，怎么都不会动
     val overflow = (textPx - boxPx).coerceAtLeast(0f)
@@ -858,11 +870,10 @@ private fun PreviewCard(
                                 append(line.substring(sung))
                             }
                         },
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = textStyle,
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip,
-                        onTextLayout = { textPx = it.size.width.toFloat() },
                         modifier = Modifier.graphicsLayer { translationX = travel },
                     )
                 }
