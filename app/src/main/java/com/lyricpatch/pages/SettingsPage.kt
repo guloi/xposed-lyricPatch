@@ -276,6 +276,8 @@ fun SettingsPage() {
                     scrollOn = state.flag(ConfKeys.WORD_SCROLL),
                     speed = state.num(ConfKeys.WORD_SCROLL_SPEED, 0),
                     delayMs = state.num(ConfKeys.WORD_SCROLL_DELAY, 500),
+                    follow = state.flag(ConfKeys.WORD_SCROLL_FOLLOW),
+                    startPct = state.num(ConfKeys.WORD_SCROLL_START_PCT, 0),
                 )
             }
             item {
@@ -773,9 +775,15 @@ private fun HeroAction(text: String, onClick: () -> Unit) {
     }
 }
 
-/** 预览：高亮随播放进度推进 */
+/** 预览：高亮和长句滚动都跟着同一个相位走 */
 @Composable
-private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
+private fun PreviewCard(
+    scrollOn: Boolean,
+    speed: Int,
+    delayMs: Int,
+    follow: Boolean,
+    startPct: Int,
+) {
     val transition = rememberInfiniteTransition(label = "preview")
     val phase by transition.animateFloat(
         initialValue = 0f,
@@ -787,8 +795,22 @@ private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
         label = "sing",
     )
 
-    val line = "这是一句较长的歌词，用于预览滚动与逐字高亮"
+    // 故意写长：不超宽的话再怎么算也没可滚距离，预览就看不出效果
+    val line = "这是一句很长的歌词，用来预览长句滚动和逐字高亮，超出控件的部分会被裁掉"
     val sung = (phase * line.length).roundToInt().coerceIn(0, line.length)
+
+    var textPx by remember { mutableStateOf(0f) }
+    var boxPx by remember { mutableStateOf(0f) }
+
+    // 可滚距离；文本没超宽就是 0，怎么都不会动
+    val overflow = (textPx - boxPx).coerceAtLeast(0f)
+    // 0 = 自动：按真实逻辑退化成“一屏能装多少算”，这里取 35%
+    val start = if (startPct in 1..99) startPct / 100f else 0.35f
+    // 先停留 → 再跟随，之后才匀速追上
+    val hold = (delayMs / 5200f).coerceIn(0f, 0.5f)
+    val begin = (hold + if (follow) (1f - hold) * start else 0f).coerceAtMost(0.4f)
+    val p = if (phase <= begin) 0f else (phase - begin) / (1f - begin).coerceAtLeast(0.01f)
+    val travel = if (scrollOn) -overflow * p.coerceIn(0f, 1f) else 0f
     val accent = MaterialTheme.colorScheme.primary
     val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
 
@@ -807,21 +829,29 @@ private fun PreviewCard(scrollOn: Boolean, speed: Int, delayMs: Int) {
                     Text("♪", style = MaterialTheme.typography.titleMedium, color = accent)
                 }
                 Spacer(Modifier.width(12.dp))
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = accent, fontWeight = FontWeight.SemiBold)) {
-                            append(line.substring(0, sung))
-                        }
-                        withStyle(SpanStyle(color = dim)) {
-                            append(line.substring(sung))
-                        }
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip,
-                    modifier = Modifier.weight(1f),
-                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RectangleShape)
+                        .onSizeChanged { boxPx = it.width.toFloat() },
+                ) {
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(SpanStyle(color = accent, fontWeight = FontWeight.SemiBold)) {
+                                append(line.substring(0, sung))
+                            }
+                            withStyle(SpanStyle(color = dim)) {
+                                append(line.substring(sung))
+                            }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        onTextLayout = { textPx = it.size.width.toFloat() },
+                        modifier = Modifier.graphicsLayer { translationX = travel },
+                    )
+                }
             }
             Spacer(Modifier.height(14.dp))
             Text(
