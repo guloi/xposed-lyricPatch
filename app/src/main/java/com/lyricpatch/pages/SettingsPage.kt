@@ -13,17 +13,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -51,20 +45,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 /**
  * 模块设置界面。
@@ -277,15 +266,6 @@ fun SettingsPage() {
                     hookVersion = state.hookVersion,
                     path = state.path ?: ConfigStore.file(context).absolutePath,
                     onReload = onReload,
-                )
-            }
-            item {
-                PreviewCard(
-                    scrollOn = state.flag(ConfKeys.WORD_SCROLL),
-                    speed = state.num(ConfKeys.WORD_SCROLL_SPEED, 0),
-                    delayMs = state.num(ConfKeys.WORD_SCROLL_DELAY, 500),
-                    follow = state.flag(ConfKeys.WORD_SCROLL_FOLLOW),
-                    startPct = state.num(ConfKeys.WORD_SCROLL_START_PCT, 0),
                 )
             }
             item {
@@ -787,117 +767,6 @@ private fun HeroAction(text: String, onClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp),
         )
-    }
-}
-
-/** 预览：高亮和长句滚动都跟着同一个相位走 */
-@Composable
-private fun PreviewCard(
-    scrollOn: Boolean,
-    speed: Int,
-    delayMs: Int,
-    follow: Boolean,
-    startPct: Int,
-) {
-    val transition = rememberInfiniteTransition(label = "preview")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 5200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "sing",
-    )
-
-    // 故意写长：不超宽的话再怎么算也没可滚距离，预览就看不出效果
-    val line = "这是一句很长的歌词，用来预览长句滚动和逐字高亮，超出控件的部分会被裁掉"
-    val sung = (phase * line.length).roundToInt().coerceIn(0, line.length)
-
-    var boxPx by remember { mutableStateOf(0f) }
-    val measurer = rememberTextMeasurer()
-    val textStyle = MaterialTheme.typography.bodyMedium
-    // 关键：用无约束测量拿整行真实宽度。
-    // onTextLayout 给的 size.width 是被可用宽度裁过的，算出来永远“没超宽”，于是怎么都不滚
-    val textPx = remember(line, textStyle, measurer) {
-        measurer.measure(
-            text = AnnotatedString(line),
-            // 按最坏情况（已唱部分加粗）量：常规字重比 SemiBold 窄，滚到底会差最后几个字
-            style = textStyle.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1,
-            softWrap = false,
-        ).size.width.toFloat()
-    }
-
-    // 可滚距离；文本没超宽就是 0，怎么都不会动
-    val overflow = (textPx - boxPx).coerceAtLeast(0f)
-    // 0 = 自动：按真实逻辑退化成“一屏能装多少算”，这里取 35%
-    val start = if (startPct in 1..99) startPct / 100f else 0.35f
-    // 先停留 → 再跟随，之后才匀速追上
-    val hold = (delayMs / 5200f).coerceIn(0f, 0.5f)
-    val begin = (hold + if (follow) (1f - hold) * start else 0f).coerceAtMost(0.4f)
-    // 留 6% 的相位让“滚到底”停一下：刚到边就弹回来，看着像没滚完
-    val denom = ((1f - begin) * 0.94f).coerceAtLeast(0.01f)
-    val p = if (phase <= begin) 0f else ((phase - begin) / denom).coerceIn(0f, 1f)
-    val travel = if (scrollOn) -overflow * p.coerceIn(0f, 1f) else 0f
-    val density = LocalDensity.current
-    val accent = MaterialTheme.colorScheme.primary
-    val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-    ) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(30.dp).clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("♪", style = MaterialTheme.typography.titleMedium, color = accent)
-                }
-                Spacer(Modifier.width(12.dp))
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RectangleShape)
-                        .onSizeChanged { boxPx = it.width.toFloat() },
-                ) {
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(SpanStyle(color = accent, fontWeight = FontWeight.SemiBold)) {
-                                append(line.substring(0, sung))
-                            }
-                            withStyle(SpanStyle(color = dim)) {
-                                append(line.substring(sung))
-                            }
-                        },
-                        style = textStyle,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip,
-                        // requiredWidth 忽略父约束：不这样写，Text 会按 Box 宽度排版，
-                        // 句尾那几个字根本不会被画出来，再怎么平移也看不到
-                        modifier = Modifier
-                            .requiredWidth(with(density) { textPx.toDp() })
-                            .graphicsLayer { translationX = travel },
-                    )
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Text(
-                if (scrollOn) {
-                    val speedText = if (speed <= 0) "自动" else "每 10ms ${speed}px"
-                    "停留 ${delayMs}ms 后滚动，$speedText"
-                } else {
-                    "未开启长句滚动，超宽部分会被裁切"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
