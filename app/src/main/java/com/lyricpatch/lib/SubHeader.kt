@@ -37,10 +37,10 @@ fun SubHeader(
         animationSpec = tween(200),
         label = "sub-arrow",
     )
-    // 子标题同样受「大标题跳动」开关控制
+    // 子标题同上：只在展开时弹
     val pop = rememberPopScale(
         expanded,
-        factor = if (UiPrefs.sectionHeaderPop) 0.5f else 0f,
+        factor = if (UiPrefs.sectionHeaderPop && expanded) 0.5f else 0f,
     )
     Row(
         modifier = Modifier.fillMaxWidth()

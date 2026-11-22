@@ -37,10 +37,11 @@ fun SectionHeader(
         animationSpec = tween(200),
         label = "section-arrow",
     )
-    // 整张卡片弹一下；可在「外观 → 大标题跳动」里关掉（factor 0 即无弹动）
+    // 整张卡片弹一下；可在「外观 → 大标题跳动」里关掉（factor 0 即无弹动）。
+    // 只在展开时弹：收起时缩放会盖到下面那张卡片，看起来像下方选项卡跳了一下。
     val pop = rememberPopScale(
         expanded,
-        factor = if (UiPrefs.sectionHeaderPop) 0.6f else 0f,
+        factor = if (UiPrefs.sectionHeaderPop && expanded) 0.6f else 0f,
     )
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)

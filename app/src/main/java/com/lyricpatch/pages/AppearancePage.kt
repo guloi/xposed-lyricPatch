@@ -58,17 +58,10 @@ fun AppearancePage(onBack: () -> Unit) {
                     checked = UiPrefs.dynamicColor,
                     onCheckedChange = { UiPrefs.updateDynamicColor(it) },
                 )
-                AnimatedVisibility(
-                    visible = !UiPrefs.dynamicColor,
-                    enter = expandVertically(animationSpec = bouncy()) +
-                        fadeIn(animationSpec = bouncy()),
-                    exit = shrinkVertically(animationSpec = bouncy()) +
-                        fadeOut(animationSpec = bouncy()),
-                ) {
-                    Column {
-                        RowDivider()
-                        AccentPicker()
-                    }
+                // 和设置页的分组用同一套展开逻辑（内含首帧不播 / 不误触处理）
+                SectionBody(!UiPrefs.dynamicColor) {
+                    RowDivider()
+                    AccentPicker()
                 }
                 // 色彩风格 / 标准始终显示，不随莫奈取色开关隐藏
                 RowDivider()
@@ -103,25 +96,17 @@ fun AppearancePage(onBack: () -> Unit) {
             CardNote("关闭后恢复为固定标题样式，所有分组始终展开。")
 
             // 只在开启「大标题折叠」时出现
-            AnimatedVisibility(
-                visible = UiPrefs.collapsible,
-                enter = expandVertically(animationSpec = bouncy()) +
-                    fadeIn(animationSpec = bouncy()),
-                exit = shrinkVertically(animationSpec = bouncy()) +
-                    fadeOut(animationSpec = bouncy()),
-            ) {
-                Column {
-                    Spacer(Modifier.height(16.dp))
-                    SettingsCard {
-                        SwitchRow(
-                            title = "首次打开默认折叠",
-                            subtitle = "只在第一次启动应用时生效",
-                            checked = UiPrefs.collapseByDefault,
-                            onCheckedChange = { UiPrefs.updateCollapseByDefault(it) },
-                        )
-                    }
-                    CardNote("仅决定进入页面时的初始状态，手动展开的分组不会写回。")
+            SectionBody(UiPrefs.collapsible) {
+                Spacer(Modifier.height(16.dp))
+                SettingsCard {
+                    SwitchRow(
+                        title = "首次打开默认折叠",
+                        subtitle = "只在第一次启动应用时生效",
+                        checked = UiPrefs.collapseByDefault,
+                        onCheckedChange = { UiPrefs.updateCollapseByDefault(it) },
+                    )
                 }
+                CardNote("仅决定进入页面时的初始状态，手动展开的分组不会写回。")
             }
 
             Spacer(Modifier.height(16.dp))
