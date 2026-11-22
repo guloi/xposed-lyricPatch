@@ -840,6 +840,7 @@ private fun PreviewCard(
     val denom = ((1f - begin) * 0.94f).coerceAtLeast(0.01f)
     val p = if (phase <= begin) 0f else ((phase - begin) / denom).coerceIn(0f, 1f)
     val travel = if (scrollOn) -overflow * p.coerceIn(0f, 1f) else 0f
+    val density = LocalDensity.current
     val accent = MaterialTheme.colorScheme.primary
     val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
 
@@ -877,7 +878,11 @@ private fun PreviewCard(
                         maxLines = 1,
                         softWrap = false,
                         overflow = TextOverflow.Clip,
-                        modifier = Modifier.graphicsLayer { translationX = travel },
+                        // requiredWidth 忽略父约束：不这样写，Text 会按 Box 宽度排版，
+                        // 句尾那几个字根本不会被画出来，再怎么平移也看不到
+                        modifier = Modifier
+                            .requiredWidth(with(density) { textPx.toDp() })
+                            .graphicsLayer { translationX = travel },
                     )
                 }
             }
@@ -927,7 +932,7 @@ private fun FieldRow(
 private fun PresetChips(current: String, onPick: (String) -> Unit) {
     val presets = listOf(
         "网易云+LRCLIB" to "netease,lrclib",
-        "网易云+酷狗+LRCLIB" to "netease,qq,kugou,lrclib",
+        "全部内置" to "netease,qq,kugou,lrclib",
         "酷狗逐字" to "kugou",
     )
     Row(
