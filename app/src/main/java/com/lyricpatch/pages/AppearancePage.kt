@@ -131,7 +131,7 @@ fun AppearancePage(onBack: () -> Unit) {
                 RowDivider()
                 SwitchRow(
                     title = "弹簧式展开",
-                    subtitle = "内容先多下沉一点再回到正确位置",
+                    subtitle = "展开用弹簧曲线，关闭则用匀速过渡",
 
                     checked = UiPrefs.sectionLegacyAnim,
                     onCheckedChange = { UiPrefs.updateSectionLegacyAnim(it) },
