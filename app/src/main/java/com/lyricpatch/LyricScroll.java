@@ -191,7 +191,9 @@ final class LyricScroll {
             progress = ((elapsed - holdMs) / (float) FRAME_MS) * sConfSpeed;
         } else {
             // 自动：剩下的路程按「这一行还要唱多久」铺满，句尾刚好露出来
-            long liveMs = Math.max(1L, span - holdMs);
+            // 起点已经先等过 sConfDelay，这段也要从剩余路程里扣掉，
+            // 否则句尾会差最后一截（delay 越大差得越多）
+            long liveMs = Math.max(1L, span - holdMs - sConfDelay);
             progress = (elapsed - holdMs) / (float) liveMs * maxScroll;
         }
         boolean done = progress >= maxScroll;

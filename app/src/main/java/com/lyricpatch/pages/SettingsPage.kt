@@ -822,7 +822,8 @@ private fun PreviewCard(
     val textPx = remember(line, textStyle, measurer) {
         measurer.measure(
             text = AnnotatedString(line),
-            style = textStyle,
+            // 按最坏情况（已唱部分加粗）量：常规字重比 SemiBold 窄，滚到底会差最后几个字
+            style = textStyle.copy(fontWeight = FontWeight.SemiBold),
             maxLines = 1,
             softWrap = false,
         ).size.width.toFloat()
@@ -835,7 +836,9 @@ private fun PreviewCard(
     // 先停留 → 再跟随，之后才匀速追上
     val hold = (delayMs / 5200f).coerceIn(0f, 0.5f)
     val begin = (hold + if (follow) (1f - hold) * start else 0f).coerceAtMost(0.4f)
-    val p = if (phase <= begin) 0f else (phase - begin) / (1f - begin).coerceAtLeast(0.01f)
+    // 留 6% 的相位让“滚到底”停一下：刚到边就弹回来，看着像没滚完
+    val denom = ((1f - begin) * 0.94f).coerceAtLeast(0.01f)
+    val p = if (phase <= begin) 0f else ((phase - begin) / denom).coerceIn(0f, 1f)
     val travel = if (scrollOn) -overflow * p.coerceIn(0f, 1f) else 0f
     val accent = MaterialTheme.colorScheme.primary
     val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
