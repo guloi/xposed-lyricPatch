@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import com.lyricpatch.lib.*
 import com.lyricpatch.ui.AppearanceActivity
+import com.lyricpatch.ui.ConfigProvider
 import com.lyricpatch.ui.ConfigStore
 import com.lyricpatch.lib.debug.CrashLogger
 import com.lyricpatch.ui.UiPrefs
@@ -80,6 +81,9 @@ private class UiState {
 
     /** null = 还没探到；true = hook 在响应；false = 没挂上 */
     var active by mutableStateOf<Boolean?>(null)
+
+    /** SystemUI 侧上报的版本：只有那边真换了代码才会变 */
+    var hookVersion by mutableStateOf("")
 }
 
 private fun String.toBooleanLoose(def: Boolean): Boolean = when (trim().lowercase()) {
@@ -201,6 +205,7 @@ fun SettingsPage() {
     LaunchedEffect(Unit) {
         while (true) {
             state.active = ConfigStore.isActive(context)
+            state.hookVersion = ConfigProvider.lastReportVersion
             delay(10_000L)
         }
     }
@@ -214,6 +219,7 @@ fun SettingsPage() {
             state.path = result.path
             state.dirty = false
             state.active = ConfigStore.isActive(context)
+            state.hookVersion = ConfigProvider.lastReportVersion
             state.busy = false
             snackbar.showSnackbar("已重新读取")
         }
@@ -267,6 +273,7 @@ fun SettingsPage() {
                     version = version,
                     dirty = state.dirty,
                     active = state.active,
+                    hookVersion = state.hookVersion,
                     path = state.path ?: ConfigStore.file(context).absolutePath,
                     onReload = onReload,
                 )
@@ -694,6 +701,7 @@ private fun Hero(
     version: String,
     dirty: Boolean,
     active: Boolean?,
+    hookVersion: String,
     path: String,
     onReload: () -> Unit,
 ) {
@@ -739,6 +747,12 @@ private fun Hero(
         Text(
             if (active == true) path else "模块未启用",
             style = MaterialTheme.typography.labelMedium.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+        )
+        // 上面那颗 v 胶囊是 APK 自己的版本，这行才是 SystemUI 里真在跑的那一代
+        Text(
+            if (hookVersion.isEmpty()) "SystemUI 侧：未知" else "SystemUI 侧 v$hookVersion",
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
         )
     }
