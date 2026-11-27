@@ -5,9 +5,19 @@ import com.lyricpatch.lib.Providers;
 
 import com.lyricpatch.lib.ConfKeys;
 
+import android.os.SystemClock;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletionService;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorCompletionService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /** 源调度 + 缓存 */
@@ -52,7 +62,103 @@ public final class LyricFetcher {
     private static final long OK_TTL = 6L * 3600 * 1000;
     private static final long MISS_TTL = 10L * 60 * 1000;
 
+    /** 一次取词的等待上限；超时就先用已经拿到的结果 */
+    private static final long FIRST_WAIT_MS = 6000L;
+
+    private static final ExecutorService FETCH_EXEC = Executors.newFixedThreadPool(4, runnable -> {
+        Thread t = new Thread(runnable, "LyricPatch-fetch");
+        t.setDaemon(true);
+        return t;
+    });
+
     private LyricFetcher() {
+    }
+
+    /** 单个源取一次；异常一律当没命中，不让一个源拖垮整轮 */
+    private static Bundle fetchOne(String provider, String title, String artist, String album,
+                                   long durationMs, String packageName, String mediaId,
+                                   boolean withTranslation) {
+        try {
+            if (Providers.isNetease(provider)) {
+                return Netease.search(title, artist, durationMs, withTranslation);
+            }
+            if (Providers.isLrcLib(provider)) {
+                return Netease.lrcLib(title, artist, album, durationMs);
+            }
+            if (Providers.isQQ(provider)) {
+                return QQMusic.search(title, artist, durationMs, withTranslation);
+            }
+            if (Providers.isKugou(provider)) {
+                return Kugou.fetch(title, artist, durationMs);
+            }
+            if (Providers.isHttp(provider)) {
+                return HttpSource.fetch(provider, title, artist, album, durationMs,
+                        packageName, mediaId, withTranslation);
+            }
+            Util.w("unknown provider: " + provider);
+        } catch (Throwable t) {
+            Util.logw("provider " + provider + " failed", t);
+        }
+        return null;
+    }
+
+    /**
+     * 同时问所有源；拿到第一个结果后再等 250ms 收尾，
+     * 让优先级更高的源也有机会补进来，最后按原顺序取第一个非空。
+     */
+    private static Bundle fetchFirst(List<String> providers, String title, String artist,
+                                     String album, long durationMs, String packageName,
+                                     String mediaId, boolean withTranslation) {
+        if (providers.isEmpty()) return null;
+
+        final Map<String, Bundle> got = new ConcurrentHashMap<>();
+        CompletionService<String> cs = new ExecutorCompletionService<>(FETCH_EXEC);
+        for (String provider : providers) {
+            cs.submit(() -> {
+                long start = SystemClock.uptimeMillis();
+                Bundle b = fetchOne(provider, title, artist, album, durationMs,
+                        packageName, mediaId, withTranslation);
+                long cost = SystemClock.uptimeMillis() - start;
+                if (b != null && !b.empty()) {
+                    got.put(provider, b);
+                    if (Util.isDebug()) Util.d("source " + provider + ": hit " + cost + "ms");
+                } else if (Util.isDebug()) {
+                    Util.d("source " + provider + ": miss " + cost + "ms");
+                }
+                return provider;
+            });
+        }
+
+        long deadline = SystemClock.uptimeMillis() + FIRST_WAIT_MS;
+        long firstOkAt = 0L;
+        int done = 0;
+        while (done < providers.size()) {
+            long now = SystemClock.uptimeMillis();
+            long limit = firstOkAt > 0L ? Math.min(deadline, firstOkAt + 250L) : deadline;
+            long left = limit - now;
+            if (left <= 0L) break;
+            Future<String> f;
+            try {
+                f = cs.poll(left, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            if (f == null) break;
+            done++;
+            try {
+                f.get();
+            } catch (Throwable ignored) {
+                // fetchOne 已经自己吞过异常了
+            }
+            if (firstOkAt == 0L && !got.isEmpty()) firstOkAt = SystemClock.uptimeMillis();
+        }
+
+        for (String provider : providers) {
+            Bundle b = got.get(provider);
+            if (b != null) return b;
+        }
+        return null;
     }
 
     public static Bundle resolve(String title, String artist, String album, long durationMs,
@@ -84,40 +190,22 @@ public final class LyricFetcher {
             }
         }
 
-        // 2) 按 providers 顺序逐个尝试
+        // 2) 并行请求所有源，再按 providers 的原顺序挑第一个有结果的：
+        //    慢的源不会把快的挡住，顺序优先级又保留
         if (bundle == null) {
-            // 注意：URL 里可能有大小写，只对内置名字做小写化
             String order = Util.conf(ConfKeys.PROVIDERS, "netease,lrclib");
             if (!Util.isEmpty(sUpstream)) {
                 // 设置里填的 base（通常是音理/lyricon 的本地服务）优先，因为它们可能带 yrc
                 order = sUpstream.replace(';', ',') + "," + order;
                 Util.d("upstream first: " + sUpstream);
             }
+            List<String> providers = new ArrayList<>();
             for (String raw : order.split(",")) {
                 String provider = raw.trim();
-                if (provider.isEmpty()) continue;
-                if (Thread.currentThread().isInterrupted()) return null;
-                try {
-                    if (Providers.isNetease(provider)) {
-                        bundle = Netease.search(title, artist, durationMs, withTranslation);
-                    } else if (Providers.isLrcLib(provider)) {
-                        bundle = Netease.lrcLib(title, artist, album, durationMs);
-                    } else if (Providers.isQQ(provider)) {
-                        bundle = QQMusic.search(title, artist, durationMs, withTranslation);
-                    } else if (Providers.isKugou(provider)) {
-                        bundle = Kugou.fetch(title, artist, durationMs);
-                    } else if (Providers.isHttp(provider)) {
-                        bundle = HttpSource.fetch(provider, title, artist, album, durationMs,
-                                packageName, mediaId, withTranslation);
-                    } else {
-                        Util.w("unknown provider: " + provider);
-                    }
-                } catch (Throwable t) {
-                    Util.logw("provider " + provider + " failed", t);
-                }
-                if (bundle != null && !bundle.empty()) break;
-                bundle = null;
+                if (!provider.isEmpty() && !providers.contains(provider)) providers.add(provider);
             }
+            bundle = fetchFirst(providers, title, artist, album, durationMs,
+                    packageName, mediaId, withTranslation);
         }
 
         if (bundle != null && bundle.empty()) bundle = null;
