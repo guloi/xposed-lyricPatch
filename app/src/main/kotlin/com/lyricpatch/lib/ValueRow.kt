@@ -50,10 +50,12 @@ fun ValueRow(
             }
         }
         Spacer(Modifier.width(12.dp))
+        // 禁用时右侧的值和箭头一起变灰，不然只剩标题是灰的，看着像还能点
+        val dim = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
         Text(
             value.ifBlank { "未设置" },
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (enabled) MaterialTheme.colorScheme.primary else dim,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 140.dp),
@@ -61,7 +63,7 @@ fun ValueRow(
         Icon(
             Icons.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else dim,
         )
     }
 }
