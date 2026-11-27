@@ -45,9 +45,9 @@
             android:theme="@style/Theme.LyricPatch"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|density|smallestScreenSize" />
 
-        <!-- 外观页：取色方式与界面动画 -->
+        <!-- 底边栏设置：外观、底栏样式与页面动画 -->
         <activity
-            android:name=".ui.AppearanceActivity"
+            android:name=".ui.BottomBarActivity"
             android:exported="false"
             android:label="@string/app_name"
             android:parentActivityName=".ui.SettingsActivity"

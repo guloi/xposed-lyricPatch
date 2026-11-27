@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.lyricpatch.ui.AppearanceActivity
+import com.lyricpatch.ui.BottomBarActivity
 import com.lyricpatch.ui.ConfigSession
 import com.lyricpatch.ui.SettingsActivity
 import com.lyricpatch.ui.UiPrefs
@@ -66,7 +66,7 @@ fun MainPage(reloadKey: Int) {
 
     fun openCategory(category: String) {
         val intent = if (category == "底边栏") {
-            Intent(context, AppearanceActivity::class.java)
+            Intent(context, BottomBarActivity::class.java)
         } else {
             Intent(context, SettingsActivity::class.java)
                 .putExtra(SettingsActivity.EXTRA_CATEGORY, category)

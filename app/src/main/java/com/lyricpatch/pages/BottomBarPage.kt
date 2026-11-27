@@ -28,7 +28,7 @@ import com.lyricpatch.ui.UiPrefs
 
 /** 底边栏设置：外观、底栏样式和页面动画 */
 @Composable
-fun AppearancePage(onBack: () -> Unit) {
+fun BottomBarPage(onBack: () -> Unit) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { inner ->
         Column(
             Modifier.fillMaxSize().padding(inner).verticalScroll(rememberScrollState()),
@@ -73,12 +73,7 @@ fun AppearancePage(onBack: () -> Unit) {
                     selected = UiPrefs.colorSpec.name,
                     onSelect = { UiPrefs.updateColorSpec(ColorSpec.of(it)) },
                 )
-            }
-            CardNote("关闭莫奈取色后，用上面的颜色和风格。")
-
-            Spacer(Modifier.height(16.dp))
-
-            SettingsCard {
+                RowDivider()
                 SwitchRow(
                     title = "MD3 样式底栏",
                     subtitle = "非悬浮时使用 Material3 底栏",
@@ -106,12 +101,7 @@ fun AppearancePage(onBack: () -> Unit) {
                     checked = UiPrefs.homeGradient,
                     onCheckedChange = { UiPrefs.updateHomeGradient(it) },
                 )
-            }
-            CardNote("改完立即生效。")
-
-            Spacer(Modifier.height(16.dp))
-
-            SettingsCard {
+                RowDivider()
                 SwitchRow(
                     title = "首页切换动画",
                     subtitle = "首页和设置之间切换时淡入淡出",
@@ -136,7 +126,7 @@ fun AppearancePage(onBack: () -> Unit) {
                     onChange = { UiPrefs.updateBounce(it) },
                 )
             }
-            CardNote("只影响界面动画，不影响歌词。")
+            CardNote("改完立即生效。")
 
             Spacer(Modifier.height(24.dp))
         }

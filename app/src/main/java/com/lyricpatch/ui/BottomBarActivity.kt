@@ -5,10 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.lyricpatch.lib.debug.CrashLogger
-import com.lyricpatch.pages.AppearancePage
+import com.lyricpatch.pages.BottomBarPage
 
-/** 外观页容器；内容在 pages/AppearancePage.kt */
-class AppearanceActivity : ComponentActivity() {
+/** 底边栏设置页容器；内容在 pages/BottomBarPage.kt */
+class BottomBarActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -16,7 +16,7 @@ class AppearanceActivity : ComponentActivity() {
         UiPrefs.load(this)
         setContent {
             LyricPatchTheme {
-                AppearancePage(onBack = { finish() })
+                BottomBarPage(onBack = { finish() })
             }
         }
     }
