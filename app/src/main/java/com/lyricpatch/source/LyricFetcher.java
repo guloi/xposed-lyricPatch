@@ -60,7 +60,12 @@ public final class LyricFetcher {
         sUpstream = setting;
     }
     private static final long OK_TTL = 6L * 3600 * 1000;
-    private static final long MISS_TTL = 10L * 60 * 1000;
+    /**
+     * 没取到只缓 30 秒。
+     * 以前是 10 分钟：网络抖一下就把整首歌标成“没词”，之后无论怎么换歌、重试都直接吃缓存，
+     * 表现就是“很难取到词”。
+     */
+    private static final long MISS_TTL = 30L * 1000;
 
     /** 一次取词的等待上限；超时就先用已经拿到的结果 */
     private static final long FIRST_WAIT_MS = 4000L;
