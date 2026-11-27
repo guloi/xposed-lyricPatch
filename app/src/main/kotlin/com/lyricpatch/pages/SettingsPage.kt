@@ -551,15 +551,14 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             item {
                 CardNote("改完就生效，不用保存，也不用重启系统界面。")
             }
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+            // 版本号只在「模块」页露出来，其它分类页不占地方
+            if (catalog.title == "模块") {
+                item {
                     Text(
                         "LyricPatch v$version",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
                         textAlign = TextAlign.Center,
                     )
                 }
