@@ -18,22 +18,22 @@ val SETTINGS_CATEGORIES = listOf(
     ),
     SettingsCategory(
         title = "显示",
-        subtitle = "逐字、滚动和外观",
+        subtitle = "逐字与长句滚动",
         sections = listOf("逐字", "长句滚动"),
     ),
     SettingsCategory(
         title = "应用",
-        subtitle = "白名单和黑名单",
+        subtitle = "白名单与黑名单",
         sections = listOf("应用过滤"),
     ),
     SettingsCategory(
-        title = "底边栏",
-        subtitle = "外观、动画和导航栏",
+        title = "外观",
+        subtitle = "配色、底栏样式和动画",
         sections = emptyList(),
     ),
     SettingsCategory(
         title = "模块",
-        subtitle = "导出、重置、日志和连接状态",
+        subtitle = "导出、重置和日志",
         sections = listOf("其他设置", "调试"),
     ),
 )

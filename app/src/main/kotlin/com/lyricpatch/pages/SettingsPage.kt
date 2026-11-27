@@ -388,7 +388,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         RowDivider()
                         SwitchRow(
                             title = "跟随唱到哪",
-                            subtitle = "按下方设定的时机跟着滚；关闭则从行首匀速滚动",
+                            subtitle = "唱到设定位置才开始移动；关闭则从行首匀速走",
                             checked = session.flag(ConfKeys.WORD_SCROLL_FOLLOW),
                             onCheckedChange = { session.setFlag(ConfKeys.WORD_SCROLL_FOLLOW, it) },
                         )
@@ -602,15 +602,17 @@ private fun TextEditDialog(
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = !multiline,
-                minLines = if (multiline) 4 else 1,
-                maxLines = if (multiline) 8 else 1,
+                // 别给太高，空着的时候一整块很亩
+                minLines = if (multiline) 3 else 1,
+                maxLines = if (multiline) 6 else 1,
                 shape = MaterialTheme.shapes.medium,
                 // 不能写成 supporting?.let { { Text(it) } }：lambda 拿不到 @Composable 的期望类型
                 supportingText = if (supporting != null) {

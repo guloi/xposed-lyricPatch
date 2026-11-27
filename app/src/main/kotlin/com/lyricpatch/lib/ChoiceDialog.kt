@@ -26,7 +26,9 @@ fun ChoiceDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        // 跟页面同一种底色，不要弹窗再铺一大块容器色
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         text = {
             Column {
                 options.forEach { (value, label) ->

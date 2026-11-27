@@ -34,8 +34,8 @@ fun BottomBarPage(onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             PageTopBar(
-                title = "底边栏",
-                subtitle = "外观、底栏样式和动画",
+                title = "外观",
+                subtitle = "配色、底栏样式和动画",
                 onBack = onBack,
             )
         },
@@ -44,7 +44,7 @@ fun BottomBarPage(onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(inner).verticalScroll(rememberScrollState()),
         ) {
             Column(Modifier.padding(top = 6.dp)) {
-                SectionLabel("外观")
+                SectionLabel("配色")
                 SettingsCard {
                     SwitchRow(
                         title = "莫奈取色",
@@ -121,7 +121,7 @@ fun BottomBarPage(onBack: () -> Unit) {
                     RowDivider()
                     SliderRow(
                         title = "回弹幅度",
-                        subtitle = "开关和图标弹一下的幅度，0 为关闭",
+                        subtitle = "开关拇指弹一下的幅度，0 为关闭",
                         value = UiPrefs.bouncePercent,
                         range = 0f..30f,
                         steps = 29,

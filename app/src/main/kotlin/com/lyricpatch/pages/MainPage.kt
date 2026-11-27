@@ -3,9 +3,13 @@ package com.lyricpatch.pages
 import android.app.ActivityOptions
 import android.content.Intent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -16,7 +20,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
+import com.lyricpatch.lib.bouncy
+import com.lyricpatch.lib.rememberPopScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lyricpatch.ui.BottomBarActivity
@@ -65,7 +72,7 @@ fun MainPage(reloadKey: Int) {
     }
 
     fun openCategory(category: String) {
-        val intent = if (category == "底边栏") {
+        val intent = if (category == "外观") {
             Intent(context, BottomBarActivity::class.java)
         } else {
             Intent(context, SettingsActivity::class.java)
@@ -136,9 +143,9 @@ private fun AppBottomBar(selected: Int, onSelect: (Int) -> Unit) {
         ) {
             Surface(
                 shape = RoundedCornerShape(32.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 6.dp,
-                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 2.dp,
+                shadowElevation = 4.dp,
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
@@ -169,7 +176,7 @@ private fun AppBottomBar(selected: Int, onSelect: (Int) -> Unit) {
 
     if (md3) {
         NavigationBar(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            containerColor = MaterialTheme.colorScheme.surface,
         ) {
             NavigationBarItem(
                 selected = selected == 0,
@@ -186,8 +193,8 @@ private fun AppBottomBar(selected: Int, onSelect: (Int) -> Unit) {
         }
     } else {
         Surface(
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            tonalElevation = 3.dp,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth()
@@ -225,32 +232,50 @@ private fun FloatingItem(
     showLabel: Boolean,
     onClick: () -> Unit,
 ) {
-    val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Surface(
-        modifier = modifier.clip(RoundedCornerShape(24.dp)).clickable(onClick = onClick),
-        shape = RoundedCornerShape(24.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
+    val pill by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = bouncy(),
+        label = "pill",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
         } else {
-            Color.Transparent
+            MaterialTheme.colorScheme.onSurfaceVariant
         },
+        animationSpec = tween(180),
+        label = "item-color",
+    )
+    val pop = rememberPopScale(selected)
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // 选中只给图标一个窄胶囊，不铺满整格
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = pill))
+                .padding(horizontal = 16.dp, vertical = 3.dp)
+                .graphicsLayer {
+                    val scale = (0.88f + 0.12f * pill) * pop
+                    scaleX = scale
+                    scaleY = scale
+                },
+            contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = label, tint = contentColor)
-            if (showLabel) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = contentColor,
-                )
-            }
+        }
+        if (showLabel) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = contentColor,
+            )
         }
     }
 }
@@ -263,19 +288,47 @@ private fun ClassicItem(
     showLabel: Boolean,
     onClick: () -> Unit,
 ) {
-    val color = if (selected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
+    val color by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        animationSpec = tween(180),
+        label = "item-color",
+    )
+    val indicator by animateDpAsState(
+        targetValue = if (selected) 18.dp else 0.dp,
+        animationSpec = bouncy(),
+        label = "indicator",
+    )
+    val pop = rememberPopScale(selected, 0.7f)
+
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 24.dp, vertical = 6.dp),
+            .padding(horizontal = 24.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, contentDescription = label, tint = color)
+        // 选中时从中间长出一小截指示条
+        Box(
+            Modifier
+                .width(indicator)
+                .height(3.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Spacer(Modifier.height(3.dp))
+        Icon(
+            icon,
+            contentDescription = label,
+            tint = color,
+            modifier = Modifier.graphicsLayer {
+                scaleX = pop
+                scaleY = pop
+            },
+        )
         if (showLabel) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = color)
         }

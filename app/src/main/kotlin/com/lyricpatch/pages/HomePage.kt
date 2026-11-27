@@ -98,7 +98,7 @@ fun HomePage(modifier: Modifier = Modifier) {
                 RowDivider()
                 InfoLine("配置文件", session.configPath, mono = true)
                 RowDivider()
-                InfoLine("存储格式", "JSON · schema 2")
+                InfoLine("存储格式", "JSON")
                 RowDivider()
                 InfoLine("上次保存", savedText)
             }
@@ -121,7 +121,7 @@ fun HomePage(modifier: Modifier = Modifier) {
                 RowDivider()
                 InfoLine("翻译", onOff(session.flag(ConfKeys.TRANSLATION)))
                 RowDivider()
-                InfoLine("逐字", onOff(session.flag(ConfKeys.AUTO_WORD_TIMING)))
+                InfoLine("自动补逐字", onOff(session.flag(ConfKeys.AUTO_WORD_TIMING)))
                 RowDivider()
                 InfoLine("长句滚动", onOff(session.flag(ConfKeys.WORD_SCROLL)))
                 RowDivider()
