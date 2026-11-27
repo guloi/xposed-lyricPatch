@@ -81,14 +81,14 @@ fun AppearancePage(onBack: () -> Unit) {
             SettingsCard {
                 SwitchRow(
                     title = "MD3 样式底栏",
-                    subtitle = "关闭后换成普通图标底栏",
+                    subtitle = "非悬浮时使用 Material3 底栏",
                     checked = UiPrefs.bottomBarMd3,
                     onCheckedChange = { UiPrefs.updateBottomBarMd3(it) },
                 )
                 RowDivider()
                 SwitchRow(
                     title = "悬浮底栏",
-                    subtitle = "底栏浮在页面底部，不贴边",
+                    subtitle = "浮在页面底部，选中项是圆角胶囊",
                     checked = UiPrefs.floatingBottomBar,
                     onCheckedChange = { UiPrefs.updateFloatingBottomBar(it) },
                 )

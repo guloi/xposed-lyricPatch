@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -128,49 +129,32 @@ private fun AppBottomBar(selected: Int, onSelect: (Int) -> Unit) {
     val homeLabel: (@Composable () -> Unit)? = if (labels) ({ Text("首页") }) else null
     val settingsLabel: (@Composable () -> Unit)? = if (labels) ({ Text("设置") }) else null
 
-    val bar: @Composable () -> Unit = {
-        if (md3) {
-            NavigationBar(
-                windowInsets = if (floating) {
-                    WindowInsets(0, 0, 0, 0)
-                } else {
-                    NavigationBarDefaults.windowInsets
-                },
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-            ) {
-                NavigationBarItem(
-                    selected = selected == 0,
-                    onClick = { onSelect(0) },
-                    icon = { Icon(Icons.Filled.Home, contentDescription = null) },
-                    label = homeLabel,
-                )
-                NavigationBarItem(
-                    selected = selected == 1,
-                    onClick = { onSelect(1) },
-                    icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                    label = settingsLabel,
-                )
-            }
-        } else {
+    if (floating) {
+        Box(
+            Modifier.fillMaxWidth().navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 10.dp),
+        ) {
             Surface(
+                shape = RoundedCornerShape(32.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 3.dp,
+                tonalElevation = 6.dp,
+                shadowElevation = 8.dp,
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
-                        .then(if (floating) Modifier else Modifier.navigationBarsPadding())
-                        .height(64.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    ClassicItem(
+                    FloatingItem(
+                        modifier = Modifier.weight(1f),
                         selected = selected == 0,
                         icon = Icons.Filled.Home,
                         label = "首页",
                         showLabel = labels,
                         onClick = { onSelect(0) },
                     )
-                    ClassicItem(
+                    FloatingItem(
+                        modifier = Modifier.weight(1f),
                         selected = selected == 1,
                         icon = Icons.Filled.Settings,
                         label = "设置",
@@ -180,24 +164,94 @@ private fun AppBottomBar(selected: Int, onSelect: (Int) -> Unit) {
                 }
             }
         }
+        return
     }
 
-    if (floating) {
-        Box(
-            Modifier.fillMaxWidth().navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+    if (md3) {
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ) {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 6.dp,
-                shadowElevation = 6.dp,
-            ) {
-                bar()
-            }
+            NavigationBarItem(
+                selected = selected == 0,
+                onClick = { onSelect(0) },
+                icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                label = homeLabel,
+            )
+            NavigationBarItem(
+                selected = selected == 1,
+                onClick = { onSelect(1) },
+                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                label = settingsLabel,
+            )
         }
     } else {
-        bar()
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 3.dp,
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .navigationBarsPadding()
+                    .height(64.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ClassicItem(
+                    selected = selected == 0,
+                    icon = Icons.Filled.Home,
+                    label = "首页",
+                    showLabel = labels,
+                    onClick = { onSelect(0) },
+                )
+                ClassicItem(
+                    selected = selected == 1,
+                    icon = Icons.Filled.Settings,
+                    label = "设置",
+                    showLabel = labels,
+                    onClick = { onSelect(1) },
+                )
+            }
+        }
+    }
+}
+
+/** 悬浮底栏：选中项是圆角胶囊，整体浮在页面底部 */
+@Composable
+private fun FloatingItem(
+    modifier: Modifier,
+    selected: Boolean,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    showLabel: Boolean,
+    onClick: () -> Unit,
+) {
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        modifier = modifier.clip(RoundedCornerShape(24.dp)).clickable(onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            Color.Transparent
+        },
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(icon, contentDescription = label, tint = contentColor)
+            if (showLabel) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = contentColor,
+                )
+            }
+        }
     }
 }
 
