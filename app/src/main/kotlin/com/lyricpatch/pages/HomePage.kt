@@ -60,7 +60,7 @@ fun HomePage(modifier: Modifier = Modifier) {
         ),
     ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp),
     ) {
         item {

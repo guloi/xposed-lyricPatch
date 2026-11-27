@@ -94,6 +94,8 @@ fun MainPage(reloadKey: Int) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        // 背景铺到状态栏下面，内容各页自己 statusBarsPadding
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(hostState = snackbar) },
         bottomBar = {
             AppBottomBar(selected = tab, onSelect = { tab = it })

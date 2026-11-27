@@ -30,7 +30,7 @@ fun SettingsIndexPage(
     onOpenCategory: (String) -> Unit,
 ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().statusBarsPadding(),
         contentPadding = PaddingValues(top = 18.dp, bottom = 28.dp),
     ) {
         item {
