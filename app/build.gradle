@@ -8,12 +8,18 @@ android {
     // 跟 ROM 对齐：这台机子的 SystemUI 就是 SDK 37（Android 17）
     compileSdk 37
 
+    sourceSets {
+        // 按语言分家：Java 在 src/main/java，Kotlin 在 src/main/kotlin。
+        // 包名不变，两边互相引用由 Kotlin 插件统一编译。
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
     defaultConfig {
         applicationId "com.lyricpatch"
         minSdk 29
         targetSdk 37
-        versionCode 106
-        versionName "4.75"
+        versionCode 109
+        versionName "4.78"
     }
 
     buildFeatures {

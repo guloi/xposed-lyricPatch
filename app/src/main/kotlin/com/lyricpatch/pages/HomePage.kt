@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.ConfKeys
 import com.lyricpatch.lib.RowDivider
+import com.lyricpatch.lib.SectionLabel
 import com.lyricpatch.lib.SettingsCard
 import com.lyricpatch.ui.ConfigSession
 import com.lyricpatch.ui.UiPrefs
@@ -245,16 +246,6 @@ private fun Pill(text: String, strong: Boolean = false) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
         )
     }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 26.dp, end = 26.dp, top = 18.dp, bottom = 8.dp),
-    )
 }
 
 @Composable

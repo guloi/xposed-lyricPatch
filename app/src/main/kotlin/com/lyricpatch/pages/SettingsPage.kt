@@ -8,12 +8,12 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -185,7 +185,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            SettingsTopBar(
+            PageTopBar(
                 title = catalog.title,
                 subtitle = saveLabel(session.saving, session.savedAt, session.error),
                 isError = session.error != null,
@@ -206,131 +206,140 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
         ) {
                         if ("数据源" in visibleSections) {
+            item { SectionLabel("数据源") }
             item {
-                SectionHeader(
-                    "数据源",
-                    "按顺序匹配，使用第一个返回歌词的源",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
-                        FieldRow(
-                            label = "providers",
-                            value = session.raw(ConfKeys.PROVIDERS),
-                            supporting = "netease / qq / kugou / lrclib，或 https:// 自建源",
-                            onChange = { session.set(ConfKeys.PROVIDERS, it) },
-                        )
-                        PresetChips(current = session.raw(ConfKeys.PROVIDERS)) {
-                            session.set(ConfKeys.PROVIDERS, it)
-                        }
-                        RowDivider()
-                        SwitchRow(
-                            title = "hide_instrumental",
-                            subtitle = "识别到纯音乐时不显示歌词",
-                            checked = session.flag(ConfKeys.HIDE_INSTRUMENTAL),
-                            onCheckedChange = { session.setFlag(ConfKeys.HIDE_INSTRUMENTAL, it) },
-                        )
-                    }
-                    CardNote("「状态栏歌词源」优先，未命中时按上方顺序。")
+                val providers = session.raw(ConfKeys.PROVIDERS)
+                var editing by remember { mutableStateOf(false) }
+                SettingsCard {
+                    ValueRow(
+                        title = "歌词源",
+                        subtitle = "按顺序匹配，第一个返回歌词的源生效",
+                        value = if (providers.isBlank()) "内置" else providers,
+                        onClick = { editing = true },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "纯音乐不出词",
+                        subtitle = "识别到纯音乐时直接不显示",
+                        checked = session.flag(ConfKeys.HIDE_INSTRUMENTAL),
+                        onCheckedChange = { session.setFlag(ConfKeys.HIDE_INSTRUMENTAL, it) },
+                    )
+                }
+                if (editing) {
+                    TextEditDialog(
+                        title = "歌词源",
+                        initial = providers,
+                        supporting = "netease / qq / kugou / lrclib，或 https:// 自建源；逗号分隔",
+                        multiline = true,
+                        onDismiss = { editing = false },
+                        onConfirm = { session.set(ConfKeys.PROVIDERS, it) },
+                    )
                 }
             }
             }
 
             if ("翻译" in visibleSections) {
+            item { SectionLabel("翻译") }
             item {
-                SectionHeader(
-                    "翻译",
-                    "控制第二行显示内容",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
-                        SwitchRow(
-                            title = "translation",
-                            subtitle = "关闭后不请求翻译",
-                            checked = session.flag(ConfKeys.TRANSLATION),
-                            onCheckedChange = { session.setFlag(ConfKeys.TRANSLATION, it) },
-                        )
-                        RowDivider()
-                        FieldRow(
-                            label = "translation_providers",
-                            value = session.raw(ConfKeys.TRANSLATION_PROVIDERS),
-                            supporting = "主源无译文时按此顺序获取：netease / qq / http(s)",
-                            onChange = { session.set(ConfKeys.TRANSLATION_PROVIDERS, it) },
-                        )
-                        RowDivider()
-                        ChoiceRow(
-                            title = "machine_translation",
-                            subtitle = "ROM 自带机翻的使用策略",
-                            options = MACHINE_MODES,
-                            selected = session.raw(ConfKeys.MACHINE_TRANSLATION),
-                            onSelect = { session.set(ConfKeys.MACHINE_TRANSLATION, it) },
-                        )
-                        RowDivider()
-                        SwitchRow(
-                            title = "hide_empty_translation",
-                            subtitle = "该行无译文时隐藏副标题",
-                            checked = session.flag(ConfKeys.HIDE_EMPTY_TRANSLATION),
-                            onCheckedChange = { session.setFlag(ConfKeys.HIDE_EMPTY_TRANSLATION, it) },
-                        )
-                        RowDivider()
-                        SwitchRow(
-                            title = "skip_translation_for_chinese",
-                            subtitle = "中文歌词不请求翻译",
-                            checked = session.flag(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE),
-                            onCheckedChange = {
-                                session.setFlag(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE, it)
-                            },
-                        )
-                        RowDivider()
-                        SwitchRow(
-                            title = "hide_translation_always",
-                            subtitle = "隐藏所有译文，仅用于排查",
-                            checked = session.flag(ConfKeys.HIDE_TRANSLATION_ALWAYS),
-                            onCheckedChange = {
-                                session.setFlag(ConfKeys.HIDE_TRANSLATION_ALWAYS, it)
-                            },
-                        )
-                    }
+                val providers = session.raw(ConfKeys.TRANSLATION_PROVIDERS)
+                val mode = session.raw(ConfKeys.MACHINE_TRANSLATION)
+                var editProviders by remember { mutableStateOf(false) }
+                var editMode by remember { mutableStateOf(false) }
+                SettingsCard {
+                    SwitchRow(
+                        title = "显示翻译",
+                        subtitle = "关闭后不再请求翻译",
+                        checked = session.flag(ConfKeys.TRANSLATION),
+                        onCheckedChange = { session.setFlag(ConfKeys.TRANSLATION, it) },
+                    )
+                    RowDivider()
+                    ValueRow(
+                        title = "翻译源",
+                        subtitle = "主源没译文时，按这个顺序去问",
+                        value = providers,
+                        onClick = { editProviders = true },
+                    )
+                    RowDivider()
+                    ValueRow(
+                        title = "机器翻译",
+                        subtitle = "ROM 自带机翻的使用策略",
+                        value = MACHINE_MODES.firstOrNull { it.first == mode }?.second
+                            ?: MACHINE_MODES.first().second,
+                        onClick = { editMode = true },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "无译文时隐藏副标题",
+                        subtitle = "那一行没翻译就不占位置",
+                        checked = session.flag(ConfKeys.HIDE_EMPTY_TRANSLATION),
+                        onCheckedChange = { session.setFlag(ConfKeys.HIDE_EMPTY_TRANSLATION, it) },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "中文歌词不翻译",
+                        subtitle = "省一次请求，也避免译文和原文一样",
+                        checked = session.flag(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE),
+                        onCheckedChange = {
+                            session.setFlag(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE, it)
+                        },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "隐藏所有译文",
+                        subtitle = "排查用；打开后第二行永远空着",
+                        checked = session.flag(ConfKeys.HIDE_TRANSLATION_ALWAYS),
+                        onCheckedChange = { session.setFlag(ConfKeys.HIDE_TRANSLATION_ALWAYS, it) },
+                    )
+                }
+                if (editProviders) {
+                    TextEditDialog(
+                        title = "翻译源",
+                        initial = providers,
+                        supporting = "按顺序获取：netease / qq，或 https:// 自建源",
+                        multiline = true,
+                        onDismiss = { editProviders = false },
+                        onConfirm = { session.set(ConfKeys.TRANSLATION_PROVIDERS, it) },
+                    )
+                }
+                if (editMode) {
+                    ChoiceDialog(
+                        title = "机器翻译",
+                        options = MACHINE_MODES,
+                        selected = mode,
+                        onDismiss = { editMode = false },
+                        onSelect = { session.set(ConfKeys.MACHINE_TRANSLATION, it) },
+                    )
                 }
             }
             }
 
                         if ("逐字" in visibleSections) {
+            item { SectionLabel("逐字") }
             item {
-                SectionHeader(
-                    "逐字",
-                    "逐字来源与补充方式",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
+                SettingsCard {
                         SwitchRow(
-                            title = "parse_word_formats",
+                            title = "解析增强格式",
                             subtitle = "解析增强 LRC 与 Lyricify Syllable 格式",
                             checked = session.flag(ConfKeys.PARSE_WORD_FORMATS),
                             onCheckedChange = { session.setFlag(ConfKeys.PARSE_WORD_FORMATS, it) },
                         )
                         RowDivider()
                         SwitchRow(
-                            title = "kugou_word_timing",
+                            title = "酷狗逐字",
                             subtitle = "缺少逐字时从酷狗获取 KRC 逐字",
                             checked = session.flag(ConfKeys.KUGOU_WORD_TIMING),
                             onCheckedChange = { session.setFlag(ConfKeys.KUGOU_WORD_TIMING, it) },
                         )
                         RowDivider()
                         SwitchRow(
-                            title = "estimate_word_timing",
+                            title = "本地估算逐字",
                             subtitle = "本地按字符估算逐字时间",
                             checked = session.flag(ConfKeys.ESTIMATE_WORD_TIMING),
                             onCheckedChange = { session.setFlag(ConfKeys.ESTIMATE_WORD_TIMING, it) },
                         )
                         RowDivider()
                         SwitchRow(
-                            title = "prefer_network_word_timing",
+                            title = "优先联网逐字",
                             subtitle = "优先使用联网逐字，响应变慢",
                             checked = session.flag(ConfKeys.PREFER_NETWORK_WORD_TIMING),
                             onCheckedChange = {
@@ -339,21 +348,21 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         )
                         RowDivider()
                         SwitchRow(
-                            title = "synth_word_timing",
+                            title = "按行合成逐字",
                             subtitle = "按行时间轴合成逐字，节奏可能不准",
                             checked = session.flag(ConfKeys.SYNTH_WORD_TIMING),
                             onCheckedChange = { session.setFlag(ConfKeys.SYNTH_WORD_TIMING, it) },
                         )
                         RowDivider()
                         SwitchRow(
-                            title = "auto_word_timing",
+                            title = "自动补逐字",
                             subtitle = "当前歌词缺少逐字时自动补充",
                             checked = session.flag(ConfKeys.AUTO_WORD_TIMING),
                             onCheckedChange = { session.setFlag(ConfKeys.AUTO_WORD_TIMING, it) },
                         )
                         RowDivider()
                         SliderRow(
-                            title = "word_timing_max_chars",
+                            title = "估算字数上限",
                             subtitle = "超过该字数不估算，0 为不限",
                             value = session.number(ConfKeys.WORD_TIMING_MAX_CHARS),
                             range = 0f..40f,
@@ -363,29 +372,22 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                             onChange = { session.setNumber(ConfKeys.WORD_TIMING_MAX_CHARS, it) },
                         )
                     }
-                }
             }
             }
 
             if ("长句滚动" in visibleSections) {
+            item { SectionLabel("长句滚动") }
             item {
-                SectionHeader(
-                    "长句滚动",
-                    "处理超出控件宽度的歌词行",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
+                SettingsCard {
                         SwitchRow(
-                            title = "word_scroll",
+                            title = "长句滚动",
                             subtitle = "为逐字模式补充横向滚动",
                             checked = session.flag(ConfKeys.WORD_SCROLL),
                             onCheckedChange = { session.setFlag(ConfKeys.WORD_SCROLL, it) },
                         )
                         RowDivider()
                         SwitchRow(
-                            title = "word_scroll_follow",
+                            title = "跟随唱到哪",
                             subtitle = "按下方设定的时机跟着滚；关闭则从行首匀速滚动",
                             checked = session.flag(ConfKeys.WORD_SCROLL_FOLLOW),
                             onCheckedChange = { session.setFlag(ConfKeys.WORD_SCROLL_FOLLOW, it) },
@@ -401,7 +403,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                             Column {
                                 RowDivider()
                                 SliderRow(
-                                    title = "word_scroll_start_pct",
+                                    title = "开始跟随时机",
                                     subtitle = "开始跟随的时机，0 为自动",
                                     value = session.number(ConfKeys.WORD_SCROLL_START_PCT),
                                     range = 0f..90f,
@@ -416,7 +418,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         }
                         RowDivider()
                         SliderRow(
-                            title = "word_scroll_speed",
+                            title = "滚动速度",
                             subtitle = "0 为自动；其余为 px/10ms",
                             value = session.number(ConfKeys.WORD_SCROLL_SPEED),
                             range = 0f..16f,
@@ -428,7 +430,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         RowDivider()
                         val delayMs = session.number(ConfKeys.WORD_SCROLL_DELAY, 500)
                         SliderRow(
-                            title = "word_scroll_delay",
+                            title = "开始前停留",
                             subtitle = "开始滚动前的停留时间",
                             value = delayMs / 100,
                             range = 0f..20f,
@@ -439,108 +441,109 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                             },
                         )
                     }
-                    CardNote("ROM 的逐字绘制不会滚动，超宽部分会被裁切。开启跟随后先静止，接近右边缘再滚动；关闭则从行首滚动。")
-                }
+                    CardNote("逐字模式不会自动滚动，超出部分会被裁切。")
             }
             }
 
                         if ("应用过滤" in visibleSections) {
+            item { SectionLabel("应用过滤") }
             item {
-                SectionHeader(
-                    "应用过滤",
-                    "白名单和黑名单二选一",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
-                        val white = session.raw(ConfKeys.APP_WHITELIST)
-                        val black = session.raw(ConfKeys.APP_BLACKLIST)
-                        // 白名单非空时黑名单失效，反之亦然：失效且自身为空的那个置灰；
-                        // 自身有内容时仍保持可编辑，否则没法清空
-                        FieldRow(
-                            label = "app_whitelist",
-                            value = white,
-                            supporting = "仅对这些包名生效，逗号分隔",
-                            enabled = !(black.isNotBlank() && white.isBlank()),
-                            onChange = { session.set(ConfKeys.APP_WHITELIST, it) },
-                        )
-                        RowDivider()
-                        FieldRow(
-                            label = "app_blacklist",
-                            value = black,
-                            supporting = "跳过这些包名；白名单非空时无效",
-                            enabled = !(white.isNotBlank() && black.isBlank()),
-                            onChange = { session.set(ConfKeys.APP_BLACKLIST, it) },
-                        )
-                    }
+                val white = session.raw(ConfKeys.APP_WHITELIST)
+                val black = session.raw(ConfKeys.APP_BLACKLIST)
+                var editing by remember { mutableStateOf<String?>(null) }
+                SettingsCard {
+                    ValueRow(
+                        title = "仅这些应用生效",
+                        subtitle = "白名单；填了就不看黑名单",
+                        value = entriesLabel(white),
+                        enabled = !(black.isNotBlank() && white.isBlank()),
+                        onClick = { editing = "white" },
+                    )
+                    RowDivider()
+                    ValueRow(
+                        title = "跳过这些应用",
+                        subtitle = "黑名单；白名单非空时无效",
+                        value = entriesLabel(black),
+                        enabled = !(white.isNotBlank() && black.isBlank()),
+                        onClick = { editing = "black" },
+                    )
+                }
+                val editingKey = when (editing) {
+                    "white" -> ConfKeys.APP_WHITELIST
+                    "black" -> ConfKeys.APP_BLACKLIST
+                    else -> null
+                }
+                if (editingKey != null) {
+                    TextEditDialog(
+                        title = if (editing == "white") "仅这些应用生效" else "跳过这些应用",
+                        initial = session.raw(editingKey),
+                        supporting = "一行一个包名，也可以逗号分隔",
+                        multiline = true,
+                        onDismiss = { editing = null },
+                        onConfirm = { session.set(editingKey, it) },
+                    )
                 }
             }
             }
 
                         if ("其他设置" in visibleSections) {
+            item { SectionLabel("其他设置") }
             item {
-                SectionHeader(
-                    "其他设置",
-                    "导出和重置",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
-                        ActionRow(
-                            title = "导出配置",
-                            subtitle = "导出成 JSON 文件",
-                            icon = Icons.Filled.Share,
-                            onClick = { launchExport() },
-                        )
-                        RowDivider()
-                        InfoRow(title = "配置文件", value = session.configPath)
-                        RowDivider()
-                        ActionRow(
-                            title = "恢复默认设置",
-                            subtitle = "配置和界面偏好恢复默认",
-                            icon = Icons.Filled.Warning,
-                            danger = true,
-                            onClick = { showReset = true },
-                        )
-                    }
-                    CardNote("和内部配置文件的格式一样，可以备份或手改。")
+                SettingsCard {
+                    ActionRow(
+                        title = "导出配置",
+                        subtitle = "存成 JSON，可以备份或手改",
+                        icon = Icons.Filled.Share,
+                        onClick = { launchExport() },
+                    )
+                    RowDivider()
+                    InfoRow(title = "配置文件", value = session.configPath)
+                    RowDivider()
+                    ActionRow(
+                        title = "恢复默认设置",
+                        subtitle = "配置和界面偏好都会重置",
+                        icon = Icons.Filled.Warning,
+                        danger = true,
+                        onClick = { showReset = true },
+                    )
                 }
             }
             }
 
             if ("调试" in visibleSections) {
+            item { SectionLabel("调试") }
             item {
-                SectionHeader(
-                    "调试",
-                    "adb logcat -s LyricPatch",
-                )
-            }
-            item {
-                SectionBody(true) {
-                    SettingsCard {
-                        // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
-                        val currentLevel = session.raw(ConfKeys.LOG_LEVEL).ifBlank {
-                            if (session.flag(ConfKeys.DEBUG_LOG)) "debug" else "info"
-                        }
-                        ChoiceRow(
-                            title = "log_level",
-                            subtitle = "info 仅关键事件；debug 含取词细节；verbose 含每帧",
-                            options = LOG_LEVELS,
-                            selected = currentLevel,
-                            onSelect = { session.set(ConfKeys.LOG_LEVEL, it) },
-                        )
-                        RowDivider()
-                        InfoRow(
-                            title = "SystemUI 侧",
-                            value = when (session.active) {
-                                true -> "已连接 · v${session.hookVersion.ifBlank { "?" }}"
-                                false -> "未响应，检查 LSPosed 作用域"
-                                null -> "检测中…"
-                            },
-                        )
-                    }
+                // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
+                val currentLevel = session.raw(ConfKeys.LOG_LEVEL).ifBlank {
+                    if (session.flag(ConfKeys.DEBUG_LOG)) "debug" else "info"
+                }
+                var picking by remember { mutableStateOf(false) }
+                SettingsCard {
+                    ValueRow(
+                        title = "日志级别",
+                        subtitle = "info 只看关键事件；debug 含取词细节",
+                        value = LOG_LEVELS.firstOrNull { it.first == currentLevel }?.second
+                            ?: currentLevel,
+                        onClick = { picking = true },
+                    )
+                    RowDivider()
+                    InfoRow(
+                        title = "SystemUI 侧",
+                        value = when (session.active) {
+                            true -> "已连接 · v${session.hookVersion.ifBlank { "?" }}"
+                            false -> "未响应，检查 LSPosed 作用域"
+                            null -> "检测中…"
+                        },
+                    )
+                }
+                if (picking) {
+                    ChoiceDialog(
+                        title = "日志级别",
+                        options = LOG_LEVELS,
+                        selected = currentLevel,
+                        onDismiss = { picking = false },
+                        onSelect = { session.set(ConfKeys.LOG_LEVEL, it) },
+                    )
                 }
             }
             }
@@ -579,41 +582,6 @@ private val LOG_LEVELS = listOf(
     "verbose" to "详细",
 )
 
-/** 顶部状态条：返回 + 当前自动保存状态 */
-@Composable
-private fun SettingsTopBar(
-    title: String,
-    subtitle: String,
-    isError: Boolean,
-    onBack: () -> Unit,
-) {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding()
-                .padding(start = 4.dp, end = 20.dp, top = 4.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isError) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
 private fun saveLabel(saving: Boolean, savedAt: Long, error: String?): String = when {
     error != null -> "保存失败：$error"
     saving -> "正在保存…"
@@ -621,58 +589,46 @@ private fun saveLabel(saving: Boolean, savedAt: Long, error: String?): String = 
     else -> "改完自动保存"
 }
 
-@Composable
-private fun FieldRow(
-    label: String,
-    value: String,
-    supporting: String?,
-    enabled: Boolean = true,
-    onChange: (String) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-        OutlinedTextField(
-            value = value,
-            // 这些键都是逗号/空格分隔的一行参数，粘贴带进来的换行直接吃掉
-            onValueChange = { raw -> onChange(raw.replace("\n", "").replace("\r", "")) },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(label) },
-            singleLine = true,
-            enabled = enabled,
-            shape = MaterialTheme.shapes.medium,
-            supportingText = if (supporting != null) {
-                { Text(supporting) }
-            } else {
-                null
-            },
-        )
-    }
-}
 
 @Composable
-private fun PresetChips(current: String, onPick: (String) -> Unit) {
-    val presets = listOf(
-        "网易云+LRCLIB" to "netease,lrclib",
-        "全部内置" to "netease,qq,kugou,lrclib",
-        "酷狗逐字" to "kugou",
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        presets.forEach { (label, value) ->
-            FilterChip(
-                selected = current == value,
-                onClick = { onPick(value) },
-                label = {
-                    Text(
-                        label,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+private fun TextEditDialog(
+    title: String,
+    initial: String,
+    supporting: String?,
+    multiline: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = !multiline,
+                minLines = if (multiline) 4 else 1,
+                maxLines = if (multiline) 8 else 1,
+                shape = MaterialTheme.shapes.medium,
+                // 不能写成 supporting?.let { { Text(it) } }：lambda 拿不到 @Composable 的期望类型
+                supportingText = if (supporting != null) {
+                    { Text(supporting) }
+                } else {
+                    null
                 },
-                modifier = Modifier.weight(1f),
             )
-        }
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text); onDismiss() }) { Text("确定") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
+
+/** 名单类配置在右侧显示成「3 项」 */
+private fun entriesLabel(raw: String): String {
+    val n = raw.split(',', '\n').count { it.trim().isNotEmpty() }
+    return if (n == 0) "未设置" else "$n 项"
 }
