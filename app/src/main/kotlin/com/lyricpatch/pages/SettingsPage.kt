@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -226,13 +227,13 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                     )
                 }
                 if (editing) {
-                    TextEditDialog(
+                    ListEditDialog(
                         title = "歌词源",
                         initial = providers,
-                        supporting = "netease / qq / kugou / lrclib，或 https:// 自建源；逗号分隔",
-                        multiline = true,
+                        placeholder = "netease",
+                        supporting = "内置：netease / qq / kugou / lrclib；也可以填 https:// 开头的自建源。从上往下一个一个试。",
                         onDismiss = { editing = false },
-                        onConfirm = { session.set(ConfKeys.PROVIDERS, it) },
+                        onConfirm = { session.set(ConfKeys.PROVIDERS, it.joinToString(",")) },
                     )
                 }
             }
@@ -292,13 +293,13 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                     )
                 }
                 if (editProviders) {
-                    TextEditDialog(
+                    ListEditDialog(
                         title = "翻译源",
                         initial = providers,
-                        supporting = "按顺序获取：netease / qq，或 https:// 自建源",
-                        multiline = true,
+                        placeholder = "netease",
+                        supporting = "内置：netease / qq；也可以填 https:// 开头的自建源。留空则只用主源自带的翻译。",
                         onDismiss = { editProviders = false },
-                        onConfirm = { session.set(ConfKeys.TRANSLATION_PROVIDERS, it) },
+                        onConfirm = { session.set(ConfKeys.TRANSLATION_PROVIDERS, it.joinToString(",")) },
                     )
                 }
                 if (editMode) {
@@ -474,13 +475,13 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                     else -> null
                 }
                 if (editingKey != null) {
-                    TextEditDialog(
+                    ListEditDialog(
                         title = if (editing == "white") "仅这些应用生效" else "跳过这些应用",
                         initial = session.raw(editingKey),
-                        supporting = "一行一个包名，也可以逗号分隔",
-                        multiline = true,
+                        placeholder = "moe.ouom.neriplayer",
+                        supporting = "填应用包名（不是名称）。可以在系统设置 → 应用信息里看到，例如 moe.ouom.neriplayer。",
                         onDismiss = { editing = null },
-                        onConfirm = { session.set(editingKey, it) },
+                        onConfirm = { session.set(editingKey, it.joinToString(",")) },
                     )
                 }
             }
@@ -589,40 +590,91 @@ private fun saveLabel(saving: Boolean, savedAt: Long, error: String?): String = 
 }
 
 
+/** 一行一个的列表编辑器：不要再多行文本框 */
 @Composable
-private fun TextEditDialog(
+private fun ListEditDialog(
     title: String,
     initial: String,
-    supporting: String?,
-    multiline: Boolean,
+    placeholder: String,
+    supporting: String,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
+    onConfirm: (List<String>) -> Unit,
 ) {
-    var text by remember { mutableStateOf(initial) }
+    val items = remember {
+        mutableStateListOf<String>().apply {
+            addAll(initial.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() })
+            if (isEmpty()) add("")
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(title, style = MaterialTheme.typography.titleMedium) },
         text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = !multiline,
-                // 别给太高，空着的时候一整块很亩
-                minLines = if (multiline) 3 else 1,
-                maxLines = if (multiline) 6 else 1,
-                shape = MaterialTheme.shapes.medium,
-                // 不能写成 supporting?.let { { Text(it) } }：lambda 拿不到 @Composable 的期望类型
-                supportingText = if (supporting != null) {
-                    { Text(supporting) }
-                } else {
-                    null
-                },
-            )
+            Column {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    items.forEachIndexed { index, value ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = value,
+                                onValueChange = { items[index] = it },
+                                modifier = Modifier.weight(1f).padding(vertical = 3.dp),
+                                singleLine = true,
+                                shape = MaterialTheme.shapes.medium,
+                                placeholder = {
+                                    Text(
+                                        placeholder,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                },
+                            )
+                            IconButton(
+                                onClick = { items.removeAt(index) },
+                                enabled = items.size > 1,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "删除这一行",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { items.add("") }) { Text("添加一行") }
+                    Text(
+                        "${items.count { it.isNotBlank() }} 项",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Text(
+                    supporting,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text); onDismiss() }) { Text("确定") }
+            TextButton(
+                onClick = {
+                    onConfirm(items.map { it.trim() }.filter { it.isNotEmpty() })
+                    onDismiss()
+                },
+            ) { Text("确定") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )

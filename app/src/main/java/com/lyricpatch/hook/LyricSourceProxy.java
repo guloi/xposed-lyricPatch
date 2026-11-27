@@ -539,7 +539,7 @@ public final class LyricSourceProxy implements InvocationHandler {
             long duration = lng(track, "durationMs");
 
             if (Util.isEmpty(title)) {
-                Util.d("skip(no title): pkg=" + pkg + " mediaId=" + mediaId);
+                Util.i("skip(no title): pkg=" + pkg + " mediaId=" + mediaId);
                 return null;
             }
 
@@ -550,13 +550,13 @@ public final class LyricSourceProxy implements InvocationHandler {
                 // 照样会把视频标题当成歌名配上词（白名单就形同虚设）。
                 Object empty = emptyLyrics();
                 if (Util.allow("skip-pkg:" + pkg, 60000L)) {
-                    Util.d("skip(not whitelisted): pkg=" + pkg + " title=" + title
+                    Util.i("skip(not whitelisted): pkg=" + pkg + " title=" + title
                             + " block=" + (empty != null));
                 }
                 return empty;
             }
-            if (Util.isDebug()) {
-                Util.d((enhanced ? "track(E): " : "track: ")
+            if (Util.allow("track:" + mediaId + title, 3000L)) {
+                Util.i((enhanced ? "track(E): " : "track: ")
                         + "title=" + title + " | artist=" + artist + " | album=" + album
                         + " | dur=" + duration + " | pkg=" + pkg + " | mediaId=" + mediaId);
             }
@@ -564,10 +564,8 @@ public final class LyricSourceProxy implements InvocationHandler {
             LyricFetcher.Bundle bundle =
                     LyricFetcher.resolve(title, artist, album, duration, pkg, mediaId);
             if (bundle == null) {
-                if (Util.isDebug()) {
-                    Util.d((enhanced ? "miss(E): " : "miss: ")
-                            + title + " / " + artist + " dur=" + duration + " pkg=" + pkg);
-                }
+                Util.i((enhanced ? "miss(E): " : "miss: ")
+                        + title + " / " + artist + " dur=" + duration + " pkg=" + pkg);
                 return null;
             }
 
