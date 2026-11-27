@@ -7,6 +7,8 @@ import com.lyricpatch.lib.NeteaseApi;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Locale;
+
 /** 网易云音乐（主） + LRCLIB（备） */
 public final class Netease {
 
@@ -142,6 +144,8 @@ public final class Netease {
 
             String id = pickBest(songs, title, artist, durationMs);
             if (id == null) return null;
+            // 搜索结果里同名不同曲太多，取词前再核一次
+            if (!verifyId(id, title, artist)) return null;
 
             String lyric = Util.get(String.format(NeteaseApi.LYRIC, Util.enc(id)), NeteaseApi.REFERER);
             LyricFetcher.Bundle bundle = enrich(id, parseLyric(lyric, withTranslation),
@@ -319,7 +323,7 @@ public final class Netease {
         return null;
     }
 
-    /** 标题相似度为主，歌手/时长校正 */    /** 标题相似度为主，歌手/时长校正 */
+    /** 标题为主，歌手/时长校正；同名不同曲靠歌手和时长筛掉 */
     private static String pickBest(JSONArray songs, String title, String artist, long durationMs) {
         String t = Util.norm(title);
         String a = Util.norm(artist);
@@ -332,10 +336,10 @@ public final class Netease {
             if (s == null) continue;
 
             double ts = Util.similarity(t, Util.norm(s.optString("name", "")));
-            if (ts < 0.5) continue;
+            // 0.5 太松：同名的别的歌会被捐进来，直接拉到 0.7
+            if (ts < 0.7) continue;
 
-            double as = Util.isEmpty(a) ? 0.5
-                    : Util.similarity(a, Util.norm(artistsName(s)));
+            double as = artistScore(a, s);
 
             long dur = s.optLong("duration", 0L);
             double ds = 0;
@@ -346,6 +350,9 @@ public final class Netease {
                 else if (diff < 15000) ds = 0.2;
             }
 
+            // 标题满分但歌手完全不对、时长也差很远 → 基本是另一首，直接不要
+            if (!Util.isEmpty(a) && as < 0.35 && ds < 0.6) continue;
+
             double score = ts * 2.0 + as * 1.2 + ds;
             if (score > bestScore) {
                 bestScore = score;
@@ -353,6 +360,42 @@ public final class Netease {
             }
         }
         return bestId;
+    }
+
+    /** 歌手名比对：包含关系也算高，不要被多歌手拼接的「/」拉低 */
+    private static double artistScore(String normalizedArtist, JSONObject song) {
+        if (Util.isEmpty(normalizedArtist)) return 0.5;
+        String an = Util.norm(artistsName(song));
+        if (an.isEmpty()) return 0;
+        if (an.equals(normalizedArtist)) return 1.0;
+        if (an.contains(normalizedArtist) || normalizedArtist.contains(an)) return 0.9;
+        return Util.similarity(normalizedArtist, an);
+    }
+
+    /** 取词前再核一次标题/歌手：搜索列表排第一不代表就是这首 */
+    private static boolean verifyId(String id, String title, String artist) {
+        try {
+            String detail = Util.get(String.format(NeteaseApi.DETAIL, Util.enc(id)),
+                    NeteaseApi.REFERER);
+            if (Util.isEmpty(detail)) return true;      // 拿不到就不拦
+            JSONArray arr = new JSONObject(detail).optJSONArray("songs");
+            if (arr == null || arr.length() == 0) return true;
+            JSONObject s = arr.optJSONObject(0);
+            if (s == null) return true;
+
+            String name = s.optString("name", "");
+            double ts = Util.similarity(Util.norm(title), Util.norm(name));
+            double as = artistScore(Util.norm(artist), s);
+            boolean ok = ts >= 0.7 && (Util.isEmpty(artist) || as >= 0.35);
+            if (!ok) {
+                Util.d("netease id " + id + " 校验不过: [" + name + "] ts="
+                        + String.format(Locale.ROOT, "%.2f", ts)
+                        + " as=" + String.format(Locale.ROOT, "%.2f", as));
+            }
+            return ok;
+        } catch (Throwable t) {
+            return true;
+        }
     }
 
     private static String artistsName(JSONObject song) {
