@@ -1,4 +1,4 @@
-package com.lyricpatch
+package com.lyricpatch.lib
 
 /**
  * 模块用到的外部歌词接口。

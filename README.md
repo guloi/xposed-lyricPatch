@@ -139,8 +139,12 @@ translation_providers=https://my.server
 
 ```
 app/src/main/java/com/lyricpatch/
-├─ api.kt      网易云 / LRCLIB / QQ / 酷狗 / 自定义 HTTP 的接口地址与参数
-├─ lib/        跨文件复用的组件与工具（一组件一文件，可继续建子目录）
+├─ LyricPatchModule.java  LSPosed API 102 入口（只做装配与钩子安装）
+├─ hook/       SystemUI 钩子实现：源代理、逐字长句滚动
+├─ source/     歌词源与解析：网易云 / LRCLIB / QQ / 酷狗 / 自定义 HTTP / 翻译
+├─ lib/        通用工具、接口地址、键名与可复用 UI 组件
+│  ├─ api.kt   外部歌词接口的地址与参数
+│  └─ Util.java 网络、字符串归一化、配置读取与日志
 ├─ pages/      页面（一个页面一个文件，Activity 只做壳）
 └─ ui/         Activity / 主题 / 配置读写 / 崩溃记录
 ```
@@ -153,7 +157,8 @@ app/src/main/java/com/lyricpatch/
 4. 新增开关 / 配置项时，先看 `lib/Keys.kt` 和其他文件已有的声明方式，按同一规则补：
    面向 SystemUI 的写进 `ConfKeys`（同步 `ConfigStore.ORDER` / `DEFAULTS`），
    纯界面偏好写进 `UiKeys`；页面里一律用 `ConfKeys.XXX` 访问，不在调用点写字面量；
-5. 新增或修改第三方歌词接口时只改 `api.kt`，请求与解析逻辑留在各自的源类里。
+5. 新增或修改第三方歌词接口时只改 `lib/api.kt`，请求与解析逻辑留在 `source/` 的源类里；
+   与 SystemUI 交互的代码放 `hook/`，通用工具放 `lib/`。
 
    
 ## 自定义源

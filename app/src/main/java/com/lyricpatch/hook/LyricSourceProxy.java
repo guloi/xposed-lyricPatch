@@ -1,6 +1,9 @@
-package com.lyricpatch;
+package com.lyricpatch.hook;
 
 import com.lyricpatch.lib.ConfKeys;
+import com.lyricpatch.lib.Util;
+import com.lyricpatch.source.LyricFetcher;
+import com.lyricpatch.source.TranslationSource;
 
 import org.json.JSONObject;
 

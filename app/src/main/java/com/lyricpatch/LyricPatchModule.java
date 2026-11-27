@@ -1,7 +1,11 @@
 package com.lyricpatch;
 
 import android.content.Context;
+import com.lyricpatch.hook.LyricScroll;
+import com.lyricpatch.hook.LyricSourceProxy;
 import com.lyricpatch.lib.ConfKeys;
+import com.lyricpatch.lib.Util;
+import com.lyricpatch.source.LyricFetcher;
 import android.graphics.Canvas;
 import android.os.Handler;
 import android.util.Log;

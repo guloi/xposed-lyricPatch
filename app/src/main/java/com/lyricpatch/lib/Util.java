@@ -1,4 +1,4 @@
-package com.lyricpatch;
+package com.lyricpatch.lib;
 
 import android.content.Context;
 import android.net.Uri;
@@ -6,8 +6,6 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
-
-import com.lyricpatch.lib.ConfKeys;
 
 import org.json.JSONObject;
 
@@ -88,7 +86,7 @@ public final class Util {
      * 当前级别。conf() 本身有快照缓存（保存时靠广播刷新），这里再按 3 秒节流一次，
      * 省得每帧绘制都重新解析一遍。log_level 不写时退回老开关：debug_log=true 等价于 debug。
      */
-    static int logLevel() {
+    public static int logLevel() {
         long now = SystemClock.uptimeMillis();
         if (sLogLevelAt != 0 && now - sLogLevelAt < 3000L) return sLogLevel;
         sLogLevelAt = now;
@@ -122,7 +120,7 @@ public final class Util {
         }
     }
 
-    static String levelName(int level) {
+    public static String levelName(int level) {
         switch (level) {
             case LOG_SILENT: return "silent";
             case LOG_ERROR: return "error";
@@ -134,16 +132,16 @@ public final class Util {
     }
 
     /** 字符串拼接有代价：这种级别的日志记得先用它挡一下 */
-    static boolean isDebug() {
+    public static boolean isDebug() {
         return logLevel() >= LOG_DEBUG;
     }
 
-    static boolean isVerbose() {
+    public static boolean isVerbose() {
         return logLevel() >= LOG_VERBOSE;
     }
 
     /** 高频路径（每次取词 / 每帧重绘）用它节流，顺便当去重：同 key 窗口内只放行一次 */
-    static boolean allow(String key, long windowMs) {
+    public static boolean allow(String key, long windowMs) {
         long now = SystemClock.uptimeMillis();
         Long last = RATE_LIMIT.get(key);
         if (last != null && now - last < windowMs) return false;
@@ -152,40 +150,40 @@ public final class Util {
         return true;
     }
 
-    static void v(String msg) {
+    public static void v(String msg) {
         write(LOG_VERBOSE, msg, null);
     }
 
-    static void d(String msg) {
+    public static void d(String msg) {
         write(LOG_DEBUG, msg, null);
     }
 
-    static void i(String msg) {
+    public static void i(String msg) {
         write(LOG_INFO, msg, null);
     }
 
-    static void w(String msg) {
+    public static void w(String msg) {
         write(LOG_WARN, msg, null);
     }
 
-    static void w(String msg, Throwable t) {
+    public static void w(String msg, Throwable t) {
         write(LOG_WARN, msg, t);
     }
 
-    static void e(String msg) {
+    public static void e(String msg) {
         write(LOG_ERROR, msg, null);
     }
 
-    static void e(String msg, Throwable t) {
+    public static void e(String msg, Throwable t) {
         write(LOG_ERROR, msg, t);
     }
 
     /** 老调用点兼容：以前的 log() 算 debug，logw() 算 warn */
-    static void log(String msg) {
+    public static void log(String msg) {
         write(LOG_DEBUG, msg, null);
     }
 
-    static void logw(String msg, Throwable t) {
+    public static void logw(String msg, Throwable t) {
         write(LOG_WARN, msg, t);
     }
 
@@ -232,7 +230,7 @@ public final class Util {
     }
 
     /** 启用时打一行，排查先看这条就知道现在是哪套配置 */
-    static String summary() {
+    public static String summary() {
         return "level=" + levelName(logLevel())
                 + " providers=" + conf(ConfKeys.PROVIDERS, "netease,lrclib")
                 + " word_scroll=" + (confBool(ConfKeys.WORD_SCROLL, true) ? "on" : "off")
@@ -241,7 +239,7 @@ public final class Util {
     }
 
     /** 截断 + 把换行拍平，logcat 里一行看得完 */
-    static String brief(String s, int max) {
+    public static String brief(String s, int max) {
         if (s == null) return "";
         String flat = s.replace('\n', ' ').replace('\r', ' ');
         return flat.length() <= max ? flat : flat.substring(0, max) + "…";
@@ -251,11 +249,11 @@ public final class Util {
         return s == null ? "" : s;
     }
 
-    static boolean isEmpty(String s) {
+    public static boolean isEmpty(String s) {
         return s == null || s.trim().isEmpty();
     }
 
-    static String enc(String s) {
+    public static String enc(String s) {
         try {
             return URLEncoder.encode(s == null ? "" : s, "UTF-8");
         } catch (Throwable t) {
@@ -264,7 +262,7 @@ public final class Util {
     }
 
     /** 让 hook 顺手把 SystemUI 的 Context 递进来（反射拿不到时的兜底） */
-    static void setContext(Context ctx) {
+    public static void setContext(Context ctx) {
         if (ctx != null && sContext == null) sContext = ctx;
     }
 
@@ -320,7 +318,7 @@ public final class Util {
      * 热更新前（旧代码里）调一次：把广播接收器摘掉、快照丢掉。
      * 不摘也能跑，只是旧一代会被系统一直引用着，热更新换不下去。
      */
-    static void stopReporting() {
+    public static void stopReporting() {
         android.content.BroadcastReceiver receiver = sWatcher;
         sWatcher = null;
         sWatching = false;
@@ -345,7 +343,7 @@ public final class Util {
      * 这里**不主动上报**：那会在每次 SystemUI 启动时把 App 进程拉起来，只为记一个时间戳；
      * 界面打开时会发 ping，收到再回写就够了。
      */
-    static void startReporting(String version) {
+    public static void startReporting(String version) {
         sExpVersion = version == null ? "" : version;
         ensureWatcher();
     }
@@ -490,12 +488,12 @@ public final class Util {
         return String.valueOf(value);
     }
 
-    static String conf(String key, String def) {
+    public static String conf(String key, String def) {
         String v = conf().getProperty(key);
         return v == null || v.trim().isEmpty() ? def : v.trim();
     }
 
-    static int confInt(String key, int def) {
+    public static int confInt(String key, int def) {
         try {
             return Integer.parseInt(conf(key, String.valueOf(def)).trim());
         } catch (Throwable t) {
@@ -503,7 +501,7 @@ public final class Util {
         }
     }
 
-    static boolean confBool(String key, boolean def) {
+    public static boolean confBool(String key, boolean def) {
         String v = conf().getProperty(key);
         if (v == null) return def;
         String s = v.trim().toLowerCase(Locale.ROOT);
@@ -511,7 +509,7 @@ public final class Util {
     }
 
     /** 简单 GET，返回 UTF-8 文本（超过 512KB 截断） */
-    static String get(String url, String referer) throws Exception {
+    public static String get(String url, String referer) throws Exception {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(url).openConnection();
@@ -543,7 +541,7 @@ public final class Util {
     }
 
     /** 粗归一化：全角/括号内容/feat·live 等修饰/标点/空白全部干掉 */
-    static String norm(String s) {
+    public static String norm(String s) {
         if (s == null) return "";
         String t = s.toLowerCase(Locale.ROOT)
                 .replace('（', '(').replace('）', ')')
@@ -562,7 +560,7 @@ public final class Util {
      *  - 无假名、汉字 ≥ 8 且明显多于拉丁字母 → 当中文处理
      * 中文歌去翻译源搜时，很容易把同名/近似歌的 tlyric 错贴上来，所以直接跳过。
      */
-    static boolean looksChinese(String s) {
+    public static boolean looksChinese(String s) {
         if (isEmpty(s)) return false;
 
         int cjk = 0;
@@ -590,7 +588,7 @@ public final class Util {
      *   app_blacklist 非空 → 名单内一律跳过
      *   拿不到包名 → 放行（宁可多试，不乱拒）
      */
-    static boolean pkgAllowed(String pkg) {
+    public static boolean pkgAllowed(String pkg) {
         String white = conf("app_whitelist", "");
         String black = conf("app_blacklist", "");
 
@@ -615,7 +613,7 @@ public final class Util {
     }
 
     /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */    /** 纯数字（判断 mediaId 能不能直接当歌曲 id） */
-    static boolean isNumeric(String s) {
+    public static boolean isNumeric(String s) {
         if (isEmpty(s)) return false;
         for (int i = 0; i < s.length(); i++) {
             if (!Character.isDigit(s.charAt(i))) return false;
@@ -623,7 +621,7 @@ public final class Util {
         return true;
     }
 
-    static double similarity(String a, String b) {
+    public static double similarity(String a, String b) {
         if (a == null || b == null || a.isEmpty() || b.isEmpty()) return 0;
         if (a.equals(b)) return 1.0;
         if (a.contains(b) || b.contains(a)) return 0.92;

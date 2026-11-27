@@ -1,4 +1,9 @@
-package com.lyricpatch;
+package com.lyricpatch.source;
+
+import com.lyricpatch.lib.Util;
+import com.lyricpatch.lib.HttpLyricApi;
+import com.lyricpatch.lib.Providers;
+import com.lyricpatch.lib.TranslationApi;
 
 import com.lyricpatch.lib.ConfKeys;
 
@@ -169,7 +174,7 @@ public final class TranslationSource {
     }
 
     /** 解出「时间 + 文本」并行列表；支持一行多个标签 [00:01.00][00:05.00]词 */
-    static void parse(String text, List<Long> times, List<String> lines) {
+    public static void parse(String text, List<Long> times, List<String> lines) {
         if (Util.isEmpty(text)) return;
         for (String raw : text.split("\\r?\\n")) {
             String line = raw.trim();

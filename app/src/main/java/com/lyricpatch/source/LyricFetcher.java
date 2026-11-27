@@ -1,4 +1,7 @@
-package com.lyricpatch;
+package com.lyricpatch.source;
+
+import com.lyricpatch.lib.Util;
+import com.lyricpatch.lib.Providers;
 
 import com.lyricpatch.lib.ConfKeys;
 

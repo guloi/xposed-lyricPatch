@@ -1,4 +1,8 @@
-package com.lyricpatch;
+package com.lyricpatch.source;
+
+import com.lyricpatch.lib.Util;
+import com.lyricpatch.lib.LrcLibApi;
+import com.lyricpatch.lib.NeteaseApi;
 
 import org.json.JSONArray;
 import org.json.JSONObject;

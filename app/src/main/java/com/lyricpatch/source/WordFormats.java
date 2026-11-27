@@ -1,4 +1,6 @@
-package com.lyricpatch;
+package com.lyricpatch.source;
+
+import com.lyricpatch.lib.Util;
 
 import java.util.ArrayList;
 import java.util.List;

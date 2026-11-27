@@ -1,7 +1,8 @@
-package com.lyricpatch;
+package com.lyricpatch.hook;
 
 import android.os.SystemClock;
 import com.lyricpatch.lib.ConfKeys;
+import com.lyricpatch.lib.Util;
 import android.view.View;
 import android.widget.TextView;
 
@@ -36,7 +37,7 @@ import java.util.WeakHashMap;
  * word_scroll_speed > 0 时会改成固定 px/10ms。
  * 滚动期间自己 postInvalidateDelayed 维持帧率（ROM 只每 250ms 才刷一次）。
  */
-final class LyricScroll {
+public final class LyricScroll {
 
     /** 与 ROM 一致：每 10ms 走 mScrollSpeed 像素 */
     static final long FRAME_MS = 10L;
@@ -71,10 +72,10 @@ final class LyricScroll {
      *   done    已经滚到底
      *   delayMs 下次自己排重绘的间隔（0 = 不排，交给 ROM 的下一次刷新）
      */
-    static final class Scroll {
-        final float dx;
-        final boolean done;
-        final long delayMs;
+    public static final class Scroll {
+        public final float dx;
+        public final boolean done;
+        public final long delayMs;
 
         Scroll(float dx, boolean done, long delayMs) {
             this.dx = dx;
@@ -97,7 +98,7 @@ final class LyricScroll {
      * 这一帧要不要接管绘制。返回 null 表示原样交给 ROM：
      * 开关关掉 / 没有逐字 / 没有文本 / 控件还没量好 / 文本本来就装得下。
      */
-    static Scroll prepare(View view) {
+    public static Scroll prepare(View view) {
         if (view == null) return null;
 
         refreshConf();
