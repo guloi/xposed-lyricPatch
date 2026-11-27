@@ -336,8 +336,8 @@ public final class Netease {
             if (s == null) continue;
 
             double ts = Util.similarity(t, Util.norm(s.optString("name", "")));
-            // 0.5 太松：同名的别的歌会被捐进来，直接拉到 0.7
-            if (ts < 0.7) continue;
+            // 0.7 会卡掉「标题写法略有差异」的正确条目，回到原来的 0.5
+            if (ts < 0.5) continue;
 
             double as = artistScore(a, s);
 
@@ -350,8 +350,8 @@ public final class Netease {
                 else if (diff < 15000) ds = 0.2;
             }
 
-            // 标题满分但歌手完全不对、时长也差很远 → 基本是另一首，直接不要
-            if (!Util.isEmpty(a) && as < 0.35 && ds < 0.6) continue;
+            // 只有歌手完全对不上、且时长也差很远，才算另一首
+            if (!Util.isEmpty(a) && as < 0.2 && ds < 0.6) continue;
 
             double score = ts * 2.0 + as * 1.2 + ds;
             if (score > bestScore) {
@@ -386,7 +386,7 @@ public final class Netease {
             String name = s.optString("name", "");
             double ts = Util.similarity(Util.norm(title), Util.norm(name));
             double as = artistScore(Util.norm(artist), s);
-            boolean ok = ts >= 0.7 && (Util.isEmpty(artist) || as >= 0.35);
+            boolean ok = ts >= 0.5 && (Util.isEmpty(artist) || as >= 0.2);
             if (!ok) {
                 Util.d("netease id " + id + " 校验不过: [" + name + "] ts="
                         + String.format(Locale.ROOT, "%.2f", ts)

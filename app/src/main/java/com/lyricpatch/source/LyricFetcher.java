@@ -77,6 +77,30 @@ public final class LyricFetcher {
     private LyricFetcher() {
     }
 
+    /**
+     * 真的几乎是中文才返回 true。
+     * 不能用 looksChinese：日文歌词里汉字很多，一旦误判就会把翻译清掉。
+     * 判据：假名占比 < 5%，且汉字占比 ≥ 60%。
+     */
+    private static boolean isAlmostAllChinese(String text) {
+        if (Util.isEmpty(text)) return false;
+        int han = 0;
+        int kana = 0;
+        int letters = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c >= 0x4E00 && c <= 0x9FFF) {
+                han++;
+            } else if (c >= 0x3040 && c <= 0x30FF) {
+                kana++;
+            } else if (Character.isLetter(c)) {
+                letters++;
+            }
+        }
+        int total = han + kana + letters;
+        return total > 0 && kana * 20 <= total && han * 5 >= total * 3;
+    }
+
     private static String firstLine(String text) {
         if (Util.isEmpty(text)) return "-";
         int nl = text.indexOf('\n');
@@ -272,7 +296,7 @@ public final class LyricFetcher {
         // 只清 tlyric，不动歌词本身，跟“抹掉已有翻译”不是一回事。
         if (bundle != null
                 && Util.confBool(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE, true)
-                && Util.looksChinese(!Util.isEmpty(bundle.lrc) ? bundle.lrc : bundle.yrc)) {
+                && isAlmostAllChinese(!Util.isEmpty(bundle.lrc) ? bundle.lrc : bundle.yrc)) {
             bundle.tlyric = null;
         }
 

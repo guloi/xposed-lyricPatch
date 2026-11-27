@@ -55,6 +55,11 @@ fun SwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            // 浅色底上未选中的轨道几乎看不见，补一圈描边
+            colors = SwitchDefaults.colors(
+                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+            ),
             thumbContent = {
                 val progress by animateFloatAsState(
                     targetValue = if (checked) 1f else 0f,
