@@ -74,6 +74,44 @@ public final class LyricFetcher {
     private LyricFetcher() {
     }
 
+    private static String firstLine(String text) {
+        if (Util.isEmpty(text)) return "-";
+        int nl = text.indexOf('\n');
+        return nl < 0 ? text : text.substring(0, nl);
+    }
+
+    /** 去掉行首时间戳和 yrc 的逐字标签，只剩正文 */
+    private static String lineBody(String line) {
+        int close = line.lastIndexOf(']');
+        String body = close >= 0 ? line.substring(close + 1) : line;
+        int i = 0;
+        while (i < body.length() && body.charAt(i) == '(') {
+            int end = body.indexOf(')', i);
+            if (end < 0) break;
+            i = end + 1;
+        }
+        return body.substring(i).trim();
+    }
+
+    /** 首行正文等于歌名就删掉这一行 */
+    private static String dropTitleLineIf(String text, String normalizedTitle) {
+        if (Util.isEmpty(text)) return text;
+        int nl = text.indexOf('\n');
+        String first = nl < 0 ? text : text.substring(0, nl);
+        String body = lineBody(first);
+        // 空行不动，ROM 自己会跳过
+        if (body.isEmpty() || !Util.norm(body).equals(normalizedTitle)) return text;
+        return nl < 0 ? "" : text.substring(nl + 1);
+    }
+
+    /** 有些源第一行是歌名，丢掉，免得第一句显示成标题 */
+    private static void dropTitleLine(Bundle bundle, String title) {
+        String normalized = Util.norm(title);
+        if (Util.isEmpty(normalized)) return;
+        bundle.yrc = dropTitleLineIf(bundle.yrc, normalized);
+        bundle.lrc = dropTitleLineIf(bundle.lrc, normalized);
+    }
+
     /** 单个源取一次；异常一律当没命中，不让一个源拖垮整轮 */
     private static Bundle fetchOne(String provider, String title, String artist, String album,
                                    long durationMs, String packageName, String mediaId,
@@ -209,6 +247,15 @@ public final class LyricFetcher {
         }
 
         if (bundle != null && bundle.empty()) bundle = null;
+
+        // 有些源（yrc 尤其）会把歌名当第一句，直接显示就是错的
+        if (bundle != null) {
+            if (Util.isDebug()) {
+                Util.d("lyric head: lrc=«" + firstLine(bundle.lrc)
+                        + "» yrc=«" + firstLine(bundle.yrc) + "»");
+            }
+            dropTitleLine(bundle, title);
+        }
 
         // yrc 字段非空 ≠ 真逐字：有些源把纯行级歌词塞进 yrc，所以看有没有 (起,长,0) 词标签
         // 增强 LRC / Lyricify Syllable 自带词级时间，识别到就直接转成 yrc（真逐字）
