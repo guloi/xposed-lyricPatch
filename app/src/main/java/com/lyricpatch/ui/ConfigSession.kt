@@ -108,12 +108,29 @@ object ConfigSession {
                 notice = result.notice
                 lastPersisted = result.values
             }
+            // 第一次打开 App：磁盘上还没有配置文件，立刻生成一份默认 JSON
+            if (!result.exists) {
+                val created = ConfigStore.save(context, result.values)
+                withContext(main) {
+                    if (created.ok) {
+                        savedAt = created.updatedAt
+                        lastPersisted = result.values
+                    } else {
+                        error = created.message.ifBlank { "无法创建配置文件" }
+                    }
+                }
+            }
+
             // 旧版 key=value 配置：读出来后写一份 JSON，再删掉旧文件
             if (result.migratedFrom != null) {
                 val migrated = ConfigStore.save(context, result.values)
                 if (migrated.ok) {
                     ConfigStore.deleteLegacy(context)
                     withContext(main) { savedAt = migrated.updatedAt }
+                } else {
+                    withContext(main) {
+                        error = migrated.message.ifBlank { "旧配置迁移失败" }
+                    }
                 }
             }
         }

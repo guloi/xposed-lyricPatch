@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -19,11 +18,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.*
 import com.lyricpatch.lib.debug.CrashLogger
+import com.lyricpatch.ui.AppearanceActivity
 import com.lyricpatch.ui.ConfigSession
 import com.lyricpatch.ui.ConfigStore
 import com.lyricpatch.ui.UiPrefs
@@ -52,12 +52,18 @@ import kotlinx.coroutines.withContext
  * 不再有“保存”按钮，也没有“是否未保存”的状态。
  */
 @Composable
-fun SettingsPage(onBack: () -> Unit) {
+fun SettingsPage(category: String, onBack: () -> Unit) {
     val context = LocalContext.current
+    val catalog = settingsCategory(category)
     val session = remember { ConfigSession.also { it.attach(context) } }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showReset by remember { mutableStateOf(false) }
+
+    // 正常从 MainPage 进来时已经加载过；直接启动详情页时兜底读一次
+    LaunchedEffect(Unit) {
+        if (!session.loaded) session.load()
+    }
 
     // 首次进入才从磁盘读；首页 / 设置页共用同一份 ConfigSession
     LaunchedEffect(Unit) {
@@ -92,13 +98,7 @@ fun SettingsPage(onBack: () -> Unit) {
     LaunchedEffect(Unit) { UiPrefs.ensureSectionDefaults(SECTION_KEYS) }
     val openSections = remember { mutableStateMapOf<String, Boolean>() }
     val collapsible = UiPrefs.collapsible
-    var category by rememberSaveable { mutableStateOf("全部") }
-    val activeSections = remember(category) {
-        CATEGORIES.firstOrNull { it.title == category }?.sections.orEmpty()
-    }
-
-    fun visible(section: String): Boolean =
-        category == "全部" || section in activeSections
+    val visibleSections = catalog.sections
 
     fun open(key: String): Boolean =
         !collapsible || (openSections[key] ?: UiPrefs.sectionOpen(key))
@@ -108,12 +108,6 @@ fun SettingsPage(onBack: () -> Unit) {
         openSections[key] = next
         UiPrefs.updateSectionOpen(key, next)
     }
-
-    // 分类筛选时直接展开该组的设置项；「全部」视图仍保留手动折叠
-    fun sectionExpanded(section: String): Boolean = category != "全部" || open(section)
-
-    fun sectionToggle(section: String): (() -> Unit)? =
-        if (category == "全部" && collapsible) ({ toggle(section) }) else null
 
     val version = remember(context) {
         runCatching {
@@ -157,8 +151,7 @@ fun SettingsPage(onBack: () -> Unit) {
             title = { Text("恢复默认设置？") },
             text = {
                 Text(
-                    "歌词配置会重写为默认 JSON；取色、折叠、回弹等界面偏好也会一起重置。" +
-                        "此操作不可撤销。",
+                    "歌词配置会写回默认 JSON，取色、折叠、动画也恢复默认。不能撤销。",
                 )
             },
             confirmButton = {
@@ -217,6 +210,7 @@ fun SettingsPage(onBack: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             SettingsTopBar(
+                title = catalog.title,
                 subtitle = saveLabel(session.saving, session.savedAt, session.error),
                 isError = session.error != null,
                 onBack = onBack,
@@ -231,24 +225,21 @@ fun SettingsPage(onBack: () -> Unit) {
             return@Scaffold
         }
 
-        Column(Modifier.fillMaxSize().padding(inner)) {
-            CategoryBar(selected = category, onSelect = { category = it })
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
-            ) {
-            if (category == "全部") item { CategoryLabel("歌词") }
-            if (visible("数据源")) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(inner),
+            contentPadding = PaddingValues(top = 6.dp, bottom = 28.dp),
+        ) {
+                        if ("数据源" in visibleSections) {
             item {
                 SectionHeader(
                     "数据源",
                     "按顺序匹配，使用第一个返回歌词的源",
-                    expanded = sectionExpanded("数据源"),
-                    onToggle = sectionToggle("数据源"),
+                    expanded = open("数据源"),
+                    onToggle = if (collapsible) ({ toggle("数据源") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("数据源")) {
+                SectionBody(open("数据源")) {
                     SettingsCard {
                         FieldRow(
                             label = "providers",
@@ -272,17 +263,17 @@ fun SettingsPage(onBack: () -> Unit) {
             }
             }
 
-            if (visible("翻译")) {
+            if ("翻译" in visibleSections) {
             item {
                 SectionHeader(
                     "翻译",
                     "控制第二行显示内容",
-                    expanded = sectionExpanded("翻译"),
-                    onToggle = sectionToggle("翻译"),
+                    expanded = open("翻译"),
+                    onToggle = if (collapsible) ({ toggle("翻译") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("翻译")) {
+                SectionBody(open("翻译")) {
                     SettingsCard {
                         SwitchRow(
                             title = "translation",
@@ -335,18 +326,17 @@ fun SettingsPage(onBack: () -> Unit) {
             }
             }
 
-            if (category == "全部") item { CategoryLabel("显示") }
-            if (visible("逐字")) {
+                        if ("逐字" in visibleSections) {
             item {
                 SectionHeader(
                     "逐字",
                     "逐字来源与补充方式",
-                    expanded = sectionExpanded("逐字"),
-                    onToggle = sectionToggle("逐字"),
+                    expanded = open("逐字"),
+                    onToggle = if (collapsible) ({ toggle("逐字") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("逐字")) {
+                SectionBody(open("逐字")) {
                     SettingsCard {
                         SwitchRow(
                             title = "parse_word_formats",
@@ -407,17 +397,17 @@ fun SettingsPage(onBack: () -> Unit) {
             }
             }
 
-            if (visible("长句滚动")) {
+            if ("长句滚动" in visibleSections) {
             item {
                 SectionHeader(
                     "长句滚动",
                     "处理超出控件宽度的歌词行",
-                    expanded = sectionExpanded("长句滚动"),
-                    onToggle = sectionToggle("长句滚动"),
+                    expanded = open("长句滚动"),
+                    onToggle = if (collapsible) ({ toggle("长句滚动") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("长句滚动")) {
+                SectionBody(open("长句滚动")) {
                     SettingsCard {
                         SwitchRow(
                             title = "word_scroll",
@@ -496,18 +486,36 @@ fun SettingsPage(onBack: () -> Unit) {
             }
             }
 
-            if (category == "全部") item { CategoryLabel("应用") }
-            if (visible("应用过滤")) {
+                        if (category == "显示") {
+                item { Spacer(Modifier.height(10.dp)) }
+                item {
+                    SettingsCard {
+                        ActionRow(
+                            title = "外观",
+                            subtitle = "取色方式、大标题折叠、回弹与动画",
+                            icon = Icons.Filled.Settings,
+                            onClick = {
+                                context.startActivity(
+                                    Intent(context, AppearanceActivity::class.java),
+                                )
+                            },
+                        )
+                    }
+                    CardNote("改完立即生效。")
+                }
+            }
+
+            if ("应用过滤" in visibleSections) {
             item {
                 SectionHeader(
                     "应用过滤",
-                    "白名单与黑名单二选一",
-                    expanded = sectionExpanded("应用过滤"),
-                    onToggle = sectionToggle("应用过滤"),
+                    "白名单和黑名单二选一",
+                    expanded = open("应用过滤"),
+                    onToggle = if (collapsible) ({ toggle("应用过滤") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("应用过滤")) {
+                SectionBody(open("应用过滤")) {
                     SettingsCard {
                         val white = session.raw(ConfKeys.APP_WHITELIST)
                         val black = session.raw(ConfKeys.APP_BLACKLIST)
@@ -533,22 +541,21 @@ fun SettingsPage(onBack: () -> Unit) {
             }
             }
 
-            if (category == "全部") item { CategoryLabel("模块") }
-            if (visible("其他设置")) {
+                        if ("其他设置" in visibleSections) {
             item {
                 SectionHeader(
                     "其他设置",
-                    "配置导出与恢复默认",
-                    expanded = sectionExpanded("其他设置"),
-                    onToggle = sectionToggle("其他设置"),
+                    "导出和重置",
+                    expanded = open("其他设置"),
+                    onToggle = if (collapsible) ({ toggle("其他设置") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("其他设置")) {
+                SectionBody(open("其他设置")) {
                     SettingsCard {
                         ActionRow(
                             title = "导出配置",
-                            subtitle = "把当前 JSON 配置保存到你选择的位置",
+                            subtitle = "导出成 JSON 文件",
                             icon = Icons.Filled.Share,
                             onClick = { launchExport() },
                         )
@@ -557,28 +564,28 @@ fun SettingsPage(onBack: () -> Unit) {
                         RowDivider()
                         ActionRow(
                             title = "恢复默认设置",
-                            subtitle = "歌词配置与界面偏好全部重置",
+                            subtitle = "配置和界面偏好恢复默认",
                             icon = Icons.Filled.Warning,
                             danger = true,
                             onClick = { showReset = true },
                         )
                     }
-                    CardNote("导出的 JSON 与内部配置文件格式一致，可用于备份或手动检查。")
+                    CardNote("和内部配置文件的格式一样，可以备份或手改。")
                 }
             }
             }
 
-            if (visible("调试")) {
+            if ("调试" in visibleSections) {
             item {
                 SectionHeader(
                     "调试",
                     "adb logcat -s LyricPatch",
-                    expanded = sectionExpanded("调试"),
-                    onToggle = sectionToggle("调试"),
+                    expanded = open("调试"),
+                    onToggle = if (collapsible) ({ toggle("调试") }) else null,
                 )
             }
             item {
-                SectionBody(sectionExpanded("调试")) {
+                SectionBody(open("调试")) {
                     SettingsCard {
                         // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
                         val currentLevel = session.raw(ConfKeys.LOG_LEVEL).ifBlank {
@@ -606,7 +613,7 @@ fun SettingsPage(onBack: () -> Unit) {
             }
 
             item {
-                CardNote("所有改动都会即时写入 JSON 配置并通知 SystemUI，无需手动保存，也无需重启系统界面。")
+                CardNote("改完就生效，不用保存，也不用重启系统界面。")
             }
             item {
                 Column(
@@ -640,21 +647,9 @@ fun SettingsPage(onBack: () -> Unit) {
                     )
                 }
             }
-            }
         }
     }
 }
-
-/** 设置项分类：分类条决定当前显示哪几组，[SettingCategory.sections] 为空表示全部 */
-private class SettingCategory(val title: String, val sections: List<String>)
-
-private val CATEGORIES = listOf(
-    SettingCategory("全部", emptyList()),
-    SettingCategory("歌词", listOf("数据源", "翻译")),
-    SettingCategory("显示", listOf("逐字", "长句滚动")),
-    SettingCategory("应用", listOf("应用过滤")),
-    SettingCategory("模块", listOf("其他设置", "调试")),
-)
 
 private val SECTION_KEYS = listOf(
     "数据源", "翻译", "逐字", "长句滚动", "应用过滤", "其他设置", "调试",
@@ -673,40 +668,14 @@ private val LOG_LEVELS = listOf(
     "verbose" to "详细",
 )
 
-/** 固定分类条：点击只显示该分类下的设置组 */
-@Composable
-private fun CategoryBar(selected: String, onSelect: (String) -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        CATEGORIES.forEach { item ->
-            FilterChip(
-                selected = item.title == selected,
-                onClick = { onSelect(item.title) },
-                label = {
-                    Text(item.title, style = MaterialTheme.typography.labelLarge)
-                },
-            )
-        }
-    }
-}
-
-/** 「全部」视图里的分组小标题 */
-@Composable
-private fun CategoryLabel(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 26.dp, end = 26.dp, top = 14.dp, bottom = 2.dp),
-    )
-}
-
 /** 顶部状态条：返回 + 当前自动保存状态 */
 @Composable
-private fun SettingsTopBar(subtitle: String, isError: Boolean, onBack: () -> Unit) {
+private fun SettingsTopBar(
+    title: String,
+    subtitle: String,
+    isError: Boolean,
+    onBack: () -> Unit,
+) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Row(
             modifier = Modifier.fillMaxWidth().statusBarsPadding()
@@ -717,7 +686,7 @@ private fun SettingsTopBar(subtitle: String, isError: Boolean, onBack: () -> Uni
                 Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
             }
             Column(Modifier.weight(1f)) {
-                Text("设置", style = MaterialTheme.typography.titleLarge)
+                Text(title, style = MaterialTheme.typography.titleLarge)
                 Text(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -738,7 +707,7 @@ private fun saveLabel(saving: Boolean, savedAt: Long, error: String?): String = 
     error != null -> "保存失败：$error"
     saving -> "正在保存…"
     savedAt > 0 -> "已自动保存 · " + DateFormat.format("HH:mm:ss", savedAt)
-    else -> "改动会即时保存"
+    else -> "改完自动保存"
 }
 
 @Composable

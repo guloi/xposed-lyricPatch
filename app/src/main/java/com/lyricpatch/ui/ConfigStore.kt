@@ -120,6 +120,8 @@ object ConfigStore {
         val values: Map<String, String>,
         val path: String,
         val updatedAt: Long,
+        /** 配置文件是否存在；false = 首次启动，调用方应生成一份默认 JSON */
+        val exists: Boolean = true,
         /** 非空 = 这次读到的是旧版 .conf，调用方应尽快写一份 JSON 并删掉旧文件 */
         val migratedFrom: String? = null,
         /** 读到了但数据有问题时给页面看的提示 */
@@ -157,6 +159,7 @@ object ConfigStore {
                     values = normalize(parsed.values),
                     path = target.absolutePath,
                     updatedAt = parsed.updatedAt,
+                    exists = true,
                 )
             }
             // JSON 坏了：先用旧 conf 兜底显示，但不自动覆盖，免得把用户手改的内容冲掉
@@ -169,6 +172,7 @@ object ConfigStore {
                 values = normalize(fallback.orEmpty()),
                 path = target.absolutePath,
                 updatedAt = 0L,
+                exists = true,
                 notice = "配置文件不是有效 JSON，已按默认值显示；修改任意项会覆盖原文件",
             )
         }
@@ -179,11 +183,17 @@ object ConfigStore {
                 values = normalize(values),
                 path = target.absolutePath,
                 updatedAt = legacy.lastModified(),
+                exists = true,
                 migratedFrom = legacy.absolutePath,
             )
         }
 
-        return LoadResult(normalize(emptyMap()), target.absolutePath, 0L)
+        return LoadResult(
+            values = normalize(emptyMap()),
+            path = target.absolutePath,
+            updatedAt = 0L,
+            exists = false,
+        )
     }
 
     /**
