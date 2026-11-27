@@ -400,6 +400,23 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                                 .let { if (it <= 0) "不限" else "$it 字" },
                             onChange = { session.setNumber(ConfKeys.WORD_TIMING_MAX_CHARS, it) },
                         )
+                        RowDivider()
+                        val offset = session.number(ConfKeys.WORD_TIMING_OFFSET)
+                        SliderRow(
+                            title = "逐字偏移",
+                            subtitle = "高亮比声音慢就调负数，快就调正数",
+                            value = offset,
+                            range = -500f..500f,
+                            steps = 19,
+                            display = when {
+                                offset == 0 -> "±0"
+                                offset > 0 -> "+${offset}ms"
+                                else -> "${offset}ms"
+                            },
+                            onChange = {
+                                session.setNumber(ConfKeys.WORD_TIMING_OFFSET, it)
+                            },
+                        )
                     }
             }
             }

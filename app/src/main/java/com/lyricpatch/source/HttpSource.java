@@ -1,6 +1,7 @@
 package com.lyricpatch.source;
 
 import com.lyricpatch.lib.Util;
+import com.lyricpatch.lib.ConfKeys;
 import com.lyricpatch.lib.HttpLyricApi;
 
 import org.json.JSONObject;
@@ -44,7 +45,8 @@ public final class HttpSource {
 
             String head = res.trim();
             if (head.startsWith("<?xml") || head.startsWith("<tt")) {
-                LyricFetcher.Bundle ttml = Ttml.parse(res, withTranslation);
+                LyricFetcher.Bundle ttml = Ttml.parse(res, withTranslation,
+                        Util.confInt(ConfKeys.WORD_TIMING_OFFSET, 0));
                 if (ttml != null && !ttml.empty()) {
                     Util.i("http ttml hit: " + base + " yrc=" + len(ttml.yrc));
                     return ttml;

@@ -36,7 +36,8 @@ final class Ttml {
     private Ttml() {
     }
 
-    static LyricFetcher.Bundle parse(String xml, boolean withTranslation) {
+    /** @param offsetMs 整体平移毫秒数（对应音理的 amll_ttml_lyric_default_offset_ms） */
+    static LyricFetcher.Bundle parse(String xml, boolean withTranslation, long offsetMs) {
         if (Util.isEmpty(xml)) return null;
         try {
             StringBuilder lrc = new StringBuilder();
@@ -51,7 +52,9 @@ final class Ttml {
 
                 long start = time(attr(ATTR_BEGIN, attrs));
                 if (start < 0) continue;
+                if (offsetMs != 0L) start = Math.max(0L, start + offsetMs);
                 long end = time(attr(ATTR_END, attrs));
+                if (end > 0 && offsetMs != 0L) end = Math.max(0L, end + offsetMs);
 
                 StringBuilder text = new StringBuilder();
                 StringBuilder words = new StringBuilder();
@@ -75,7 +78,12 @@ final class Ttml {
 
                     long sb = time(attr(ATTR_BEGIN, sAttrs));
                     long se = time(attr(ATTR_END, sAttrs));
-                    if (sb < 0) sb = start;
+                    if (sb < 0) {
+                        sb = start;
+                    } else if (offsetMs != 0L) {
+                        sb = Math.max(0L, sb + offsetMs);
+                    }
+                    if (se > 0 && offsetMs != 0L) se = Math.max(0L, se + offsetMs);
                     if (se <= sb) se = sb + 200L;
 
                     text.append(body);

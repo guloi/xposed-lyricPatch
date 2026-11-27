@@ -170,7 +170,10 @@ public final class LyricScroll {
             } else {
                 // 自动：一屏能装下整行的多少，就是能静止多大比例
                 float fits = width / Math.max(1f, textWidth);
-                hold = Math.min(0.8f, Math.max(0.35f, fits));
+                // 下限从 0.35 降到 0.05：
+                // 长句时一屏只装得下 0.2 左右，等到 0.35 才开始滚，
+                // 高亮已经跑到右边缘甚至出屏，看起来就是“位移跟不上”。
+                hold = Math.min(0.85f, Math.max(0.05f, fits));
             }
             holdMs = (long) (span * hold);
         }

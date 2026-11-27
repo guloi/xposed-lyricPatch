@@ -23,6 +23,8 @@ object ConfKeys {
     const val SYNTH_WORD_TIMING = "synth_word_timing"
     const val AUTO_WORD_TIMING = "auto_word_timing"
     const val WORD_TIMING_MAX_CHARS = "word_timing_max_chars"
+    /** 逐字整体偏移（ms）：高亮比声音慢就调负，快就调正 */
+    const val WORD_TIMING_OFFSET = "word_timing_offset"
 
     const val WORD_SCROLL = "word_scroll"
     const val WORD_SCROLL_FOLLOW = "word_scroll_follow"
