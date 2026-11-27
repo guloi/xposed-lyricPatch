@@ -32,7 +32,32 @@ jobs:
           gradle-version: '9.3.0'
 
       - name: Assemble
-        run: gradle assembleRelease --no-daemon --stacktrace
+        shell: bash
+        # tee 一份到 build.log，同时靠 pipefail 保留 gradle 的退出码
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      # 失败时先把尾部打出来，Actions 页面不用下载就能看到关键报错
+      - name: Build log tail
+        if: failure()
+        shell: bash
+        run: |
+          echo '```'
+          tail -n 200 build.log || true
+          echo '```'
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            build.log
+            build/reports/problems/problems-report.html
+            app/build/reports/**
 
       - uses: actions/upload-artifact@v5
         with:
