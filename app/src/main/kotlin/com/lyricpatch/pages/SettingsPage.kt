@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -122,6 +123,33 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
     fun launchExport() {
         val stamp = DateFormat.format("yyyyMMdd-HHmm", System.currentTimeMillis())
         exportLauncher.launch("lyricpatch-$stamp.json")
+    }
+
+    // 导入：选一份 JSON，只认已登记的键，整份替换
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)?.use {
+                        it.readBytes().toString(Charsets.UTF_8)
+                    }
+                }.getOrNull()
+            }
+            val imported = text?.let { ConfigStore.parseImported(it) }
+            if (imported == null) {
+                snackbar.showSnackbar("导入失败：不是有效的配置文件")
+            } else {
+                session.replaceAll(imported)
+                snackbar.showSnackbar("已导入 ${imported.size} 项")
+            }
+        }
+    }
+
+    fun launchImport() {
+        importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
     }
 
     if (showReset) {
@@ -491,6 +519,13 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             item { SectionLabel("其他设置") }
             item {
                 SettingsCard {
+                    ActionRow(
+                        title = "导入配置",
+                        subtitle = "从 JSON 文件恢复，只认已登记的项",
+                        icon = Icons.Filled.Refresh,
+                        onClick = { launchImport() },
+                    )
+                    RowDivider()
                     ActionRow(
                         title = "导出配置",
                         subtitle = "存成 JSON，可以备份或手改",

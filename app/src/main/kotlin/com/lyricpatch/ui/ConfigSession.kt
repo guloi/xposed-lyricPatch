@@ -148,6 +148,15 @@ object ConfigSession {
 
     fun setNumber(key: String, value: Int) = set(key, value.toString())
 
+    /** 导入配置：整份替换内存值，并触发一次落盘 */
+    fun replaceAll(imported: Map<String, String>) {
+        values.clear()
+        values.putAll(imported)
+        notice = null
+        error = null
+        saveSignal.trySend(Unit)
+    }
+
     /** 完整重置：歌词配置回到默认值（文件里未知键也会被清掉） */
     fun reset() {
         values.clear()

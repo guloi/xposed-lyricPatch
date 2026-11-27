@@ -332,6 +332,31 @@ object ConfigStore {
         return root.toString(2) + "\n"
     }
 
+    /**
+     * 解析导入的配置：只认 [ORDER] 里登记过的键，未知键忽略。
+     * 不是 JSON / 一个有效键都没有时返回 null。
+     */
+    fun parseImported(text: String): Map<String, String>? = runCatching {
+        val root = JSONObject(text)
+        val body = root.optJSONObject("values") ?: root
+        val out = linkedMapOf<String, String>()
+        for (key in ORDER) {
+            if (!body.has(key)) continue
+            val value = body.opt(key)
+            if (value == null || value == JSONObject.NULL) continue
+            out[key] = when (value) {
+                is Boolean -> value.toString()
+                is Number -> if (value.toDouble() == value.toLong().toDouble()) {
+                    value.toLong().toString()
+                } else {
+                    value.toString()
+                }
+                else -> value.toString()
+            }
+        }
+        out.ifEmpty { null }
+    }.getOrNull()
+
     private fun appVersion(context: Context): String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName
     }.getOrNull().orEmpty()
