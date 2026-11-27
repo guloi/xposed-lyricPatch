@@ -42,7 +42,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.84";
+    private static final String VERSION = "4.86";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -57,16 +57,6 @@ public final class LyricPatchModule extends XposedModule {
     /** 状态栏歌词的那个自绘 TextView（跑马灯 + 逐字高亮都在它的 onDraw 里） */
     private static final String CLS_LYRIC_TEXT_VIEW =
             "com.android.systemui.util.LyricTextView";
-
-    private static final String[] LOADER_GETTERS = {
-            "getClassLoader",
-            "getDefaultClassLoader",
-            "getModuleClassLoader",
-            "getTargetClassLoader",
-            "getClassloader"
-    };
-
-    private static boolean sLoggedMiss;
 
     /** 本代装上的钩子，key 是钩住的方法本身：热更新时用它和旧句柄对账 */
     private static final Map<Executable, XposedInterface.HookHandle> sHooks = new HashMap<>();
@@ -83,15 +73,8 @@ public final class LyricPatchModule extends XposedModule {
     @Override
     public void onPackageLoaded(XposedModuleInterface.PackageLoadedParam param) {
         try {
-            ClassLoader cl = resolveClassLoader(param);
-            if (cl == null) {
-                if (!sLoggedMiss) {
-                    sLoggedMiss = true;
-                    log(Log.WARN, TAG, "no classloader getter on " + param.getClass().getName()
-                            + " methods=[" + dumpMethods(param.getClass()) + "]", null);
-                }
-                return;
-            }
+            // API 102 直接给默认 ClassLoader，不用再反射试探
+            ClassLoader cl = param.getDefaultClassLoader();
 
             // 不是 SystemUI 就安静跳过（只探测，不初始化）
             try {
@@ -113,6 +96,10 @@ public final class LyricPatchModule extends XposedModule {
             Class<?> factory = Class.forName(CLS_FACTORY, false, cl);
             Method create = factory.getDeclaredMethod("create", String.class);
             final Object source = LyricSourceProxy.get(cl);
+            if (source == null) {
+                // 这一条必须看得见：代理没造出来 = 本次只会剩 ROM 自带的源
+                Util.w("我们的 LyricSource 没造出来，本次只剩 ROM 自带源");
+            }
 
             mount(create, chain -> {
                 String setting = null;
@@ -122,39 +109,56 @@ public final class LyricPatchModule extends XposedModule {
                 }
                 boolean emptySetting = setting == null || setting.trim().isEmpty();
 
-                // 记住用户配置的状态栏歌词源（可能是音理/lyricon 的本地 HTTP 服务）
-                LyricFetcher.setUpstream(emptySetting ? null : setting);
+                // 入口先打一条：只要钩子被调到就能看到，不看后面成不成
+                if (Util.isDebug()) {
+                    log(Log.DEBUG, TAG, "create: enter setting='" + brief(setting) + "'", null);
+                }
 
                 List<Object> out = new ArrayList<>();
 
-                // 我们的源永远排第一：
-                //  - 设置为空：正常补源（内置 Apple/LrcLib 垫底）
-                //  - 设置非空：我们也会按同样协议去问那个 base，但能完整保留 yrc（逐字）；
-                //    ROM 自带 HttpLyricSource 只读 lrc/tlyric，会把逐字丢掉
-                // ROM 自带的每个源都包一层：没逐字就用我们的替换
-                Object original = chain.proceed();
-                if (original instanceof List) {
-                    for (Object o : (List<?>) original) {
-                        out.add(LyricSourceProxy.wrap(cl, o));
+                // ① ROM 自己的源逐个包一层：没逐字就用我们的替换。
+                //    proceeded 之后再抛异常也不能让整个 create 挂掉，否则连 ROM 源都没了
+                try {
+                    Object original = chain.proceed();
+                    if (original instanceof List) {
+                        for (Object o : (List<?>) original) {
+                            out.add(LyricSourceProxy.wrap(cl, o));
+                        }
                     }
+                } catch (Throwable t) {
+                    log(Log.WARN, TAG, "create: ROM 源列表拿不到", t);
                 }
 
-                // 我们自己的源依旧排第一（ROM 列表为空时也能出词）
-                Object src = source != null ? source : LyricSourceProxy.get(cl);
-                if (src != null) out.add(0, src);
+                // ② 我们的源永远排第一（列表为空时也能出词）
+                Object src = null;
+                try {
+                    LyricFetcher.setUpstream(emptySetting ? null : setting);
+                    src = source != null ? source : LyricSourceProxy.get(cl);
+                    if (src != null) out.add(0, src);
+                } catch (Throwable t) {
+                    log(Log.WARN, TAG, "create: 插入我们的源失败", t);
+                }
 
-                // 每次 create 都打一条：能直接看出“源到底插进去没”和“设置里填了什么”
                 if (Util.isDebug()) {
-                    log(Log.DEBUG, TAG, "create: setting='" + brief(setting)
-                            + "' proxy=" + (src != null) + " total=" + out.size(), null);
+                    log(Log.DEBUG, TAG, "create: total=" + out.size()
+                            + " ours=" + (src != null), null);
                 }
-
                 return out;
             });
+
+            // create 只有 47 条指令，很容易被 ART 内联进调用方，内联后钩子就收不到调用
+            deoptimizeCallers(cl);
 
             log(Log.INFO, TAG, "hooked " + CLS_FACTORY + "#create", null);
         } catch (Throwable t) {
             log(Log.WARN, TAG, "hook LyricSourceFactory failed", t);
+            // 签名一变这里一眼就能看出来
+            try {
+                Class<?> factory = Class.forName(CLS_FACTORY, false, cl);
+                Util.w("LyricSourceFactory 实际方法: " + methodSignatures(factory));
+            } catch (Throwable ignored) {
+                Util.w("连 " + CLS_FACTORY + " 都找不到");
+            }
         }
     }
 
@@ -203,13 +207,9 @@ public final class LyricPatchModule extends XposedModule {
 
         sInstalled = true;
 
-        if (Util.isDebug()) {
-            log(Log.DEBUG, TAG, "hooks=" + sHooks.size(), null);
-        }
-
-        // 一行把当前配置说完，排查时先看这条（log_level 决定后面还有多少细节）
+        // 一行把当前配置和钩子数说完，排查时先看这条
         try {
-            log(Log.INFO, TAG, "ready: " + Util.summary(), null);
+            log(Log.INFO, TAG, "ready: hooks=" + sHooks.size() + ", " + Util.summary(), null);
         } catch (Throwable ignored) {
             // 配置读不到不影响出词
         }
@@ -239,7 +239,7 @@ public final class LyricPatchModule extends XposedModule {
 
         if (handle == null) {
             try {
-                handle = intercept(hook(origin), hooker);
+                handle = hook(origin).intercept(hooker);
             } catch (Throwable t) {
                 log(Log.WARN, TAG, "hook failed: " + shortName(origin), t);
                 return;
@@ -249,38 +249,53 @@ public final class LyricPatchModule extends XposedModule {
         if (handle != null) sHooks.put(origin, handle);
     }
 
-    /**
-     * 装上钩子并拿回句柄。
-     * 用反射调 intercept 是为了不挑编译期签名：这个方法在不同框架版本里
-     * 有“返回 HookHandle”和“无返回值”两种声明。拿不到句柄最多是下次热更新
-     * 没法替它，不影响正常 hook。
-     */
-    private static XposedInterface.HookHandle intercept(XposedInterface.HookBuilder builder,
-                                                        XposedInterface.Hooker hooker) throws Throwable {
-        Method method = null;
-        try {
-            method = XposedInterface.HookBuilder.class.getMethod(
-                    "intercept", XposedInterface.Hooker.class);
-        } catch (Throwable ignored) {
-            // 反射不到就直接调，反正钩子得装上
-        }
-
-        if (method == null) {
-            builder.intercept(hooker);
-            return null;
-        }
-
-        try {
-            Object r = method.invoke(builder, hooker);
-            return r instanceof XposedInterface.HookHandle ? (XposedInterface.HookHandle) r : null;
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            throw e.getCause() != null ? e.getCause() : e;
-        }
-    }
-
     private static String shortName(Executable e) {
         if (e == null) return "null";
         return e.getDeclaringClass().getSimpleName() + "#" + e.getName();
+    }
+
+    /**
+     * create 太短，容易在编译期被内联进这两个 lambda 里；
+     * 反优化它们，保证运行时真的会走到被 hook 的 create。
+     * 类名带 ROM 编译产物编号，找不到就算了（不影响其他钩子）。
+     */
+    private void deoptimizeCallers(ClassLoader cl) {
+        String[] names = {
+                "com.android.systemui.statusbar.phone.LyricViewController$$ExternalSyntheticLambda2",
+                "com.android.systemui.statusbar.quickactions.island.media.domain.interactor" +
+                        ".MediaControlChipInteractor$setupLyricsWorker$1$2$1$$ExternalSyntheticLambda0",
+        };
+        for (String name : names) {
+            try {
+                Class<?> type = Class.forName(name, false, cl);
+                for (Method m : type.getDeclaredMethods()) {
+                    if (m.getParameterCount() != 0) continue;
+                    if (deoptimize(m)) Util.i("deoptimize " + type.getSimpleName() + "#" + m.getName());
+                }
+            } catch (Throwable ignored) {
+                // 类名对不上就算了
+            }
+        }
+    }
+
+    /** 日志用：把这个类的方法签名拼成一行，方便对照 ROM 实际长什么样 */
+    private static String methodSignatures(Class<?> type) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            for (Method m : type.getDeclaredMethods()) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(m.getName()).append('(');
+                Class<?>[] ps = m.getParameterTypes();
+                for (int i = 0; i < ps.length; i++) {
+                    if (i > 0) sb.append(',');
+                    sb.append(ps[i].getSimpleName());
+                }
+                sb.append(')');
+            }
+        } catch (Throwable ignored) {
+            // 拿不到就算了
+        }
+        return sb.toString();
     }
 
     /**
@@ -298,12 +313,7 @@ public final class LyricPatchModule extends XposedModule {
                 return;
             }
 
-            List<XposedInterface.HookHandle> old = null;
-            try {
-                old = param.getOldHookHandles();
-            } catch (Throwable ignored) {
-                // 老框架没有这个方法，下面照样能从缓存的 loader 装回去
-            }
+            List<XposedInterface.HookHandle> old = param.getOldHookHandles();
 
             ClassLoader cl = loaderOf(old);
             if (cl == null) cl = sClassLoader;
@@ -1043,59 +1053,4 @@ public final class LyricPatchModule extends XposedModule {
         return cues instanceof Map ? ((Map<?, ?>) cues).size() : 0;
     }
 
-    /** 把一个类所有无参方法名拼起来，方便定位框架真实方法名 */
-    private static String dumpMethods(Class<?> type) {
-        StringBuilder sb = new StringBuilder();
-        try {
-            for (Method m : type.getMethods()) {
-                if (m.getParameterCount() != 0) continue;
-                if (sb.length() > 0) sb.append(',');
-                sb.append(m.getName());
-            }
-        } catch (Throwable ignored) {
-            // ignore
-        }
-        return sb.toString();
-    }
-
-    /** 反射取 classloader，兼容各种命名 */
-    private static ClassLoader resolveClassLoader(Object param) {
-        if (param == null) return null;
-        Class<?> type = param.getClass();
-
-        for (String name : LOADER_GETTERS) {
-            Method m = findNoArgMethod(type, name);
-            if (m == null) continue;
-            try {
-                m.setAccessible(true);
-                Object v = m.invoke(param);
-                if (v instanceof ClassLoader) return (ClassLoader) v;
-            } catch (Throwable ignored) {
-                // 试下一个
-            }
-        }
-        return null;
-    }
-
-    private static Method findNoArgMethod(Class<?> type, String name) {
-        for (Class<?> c = type; c != null; c = c.getSuperclass()) {
-            try {
-                for (Method m : c.getDeclaredMethods()) {
-                    if (m.getName().equals(name) && m.getParameterCount() == 0) return m;
-                }
-            } catch (Throwable ignored) {
-                // 继续找父类
-            }
-        }
-        for (Class<?> itf : type.getInterfaces()) {
-            try {
-                for (Method m : itf.getDeclaredMethods()) {
-                    if (m.getName().equals(name) && m.getParameterCount() == 0) return m;
-                }
-            } catch (Throwable ignored) {
-                // ignore
-            }
-        }
-        return null;
-    }
 }

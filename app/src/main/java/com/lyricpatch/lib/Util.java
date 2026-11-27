@@ -405,7 +405,11 @@ public final class Util {
                 sConfAt = now;
                 if (!sConfLogged) {
                     sConfLogged = true;
-                    log("conf: " + loaded.size() + " keys（来自模块 App 内部存储）");
+                    // 把关键键打出来：能直接判断“读到了”还是“读到的是默认/旧值”
+                    log("conf: " + loaded.size() + " keys, log_level="
+                            + loaded.getProperty(ConfKeys.LOG_LEVEL, "-")
+                            + ", providers=" + loaded.getProperty(ConfKeys.PROVIDERS, "-")
+                            + ", translation=" + loaded.getProperty(ConfKeys.TRANSLATION, "-"));
                 }
                 return loaded;
             }
