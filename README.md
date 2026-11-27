@@ -157,10 +157,12 @@ app/src/main/java/com/lyricpatch/
 1. 新页面放 `pages/`，Activity 留在 `ui/` 里只负责 `setContent`；
 2. 只有**被多个文件使用**的东西才提到 `lib`；只服务单个文件的（哪怕调用多次）留在原文件里，用 `private`；
 3. 页面独有、与页面 state 强耦合的组件留在 `pages`；
-4. 新增开关 / 配置项时，先看 `lib/Keys.kt` 和其他文件已有的声明方式，按同一规则补：
+4. 选项表 / 预设列表（`"value" to "文案"`、色板、枚举映射）统一放 `lib/list/`，
+   页面里不内联 `listOf(...)`；纯绘制用的颜色、渐变色不算选项表；
+5. 新增开关 / 配置项时，先看 `lib/Keys.kt` 和其他文件已有的声明方式，按同一规则补：
    面向 SystemUI 的写进 `ConfKeys`（同步 `ConfigStore.ORDER` / `DEFAULTS`），
    纯界面偏好写进 `UiKeys`；页面里一律用 `ConfKeys.XXX` 访问，不在调用点写字面量；
-5. 新增或修改第三方歌词接口时只改 `lib/Api.kt`，请求与解析逻辑留在 `source/` 的源类里；
+6. 新增或修改第三方歌词接口时只改 `lib/Api.kt`，请求与解析逻辑留在 `source/` 的源类里；
    与 SystemUI 交互的代码放 `hook/`，通用工具放 `lib/`。
 
    

@@ -25,8 +25,8 @@ fun SectionBody(expanded: Boolean, content: @Composable ColumnScope.() -> Unit) 
 
     AnimatedVisibility(
         visibleState = state,
-        enter = expandVertically(animationSpec = tween(220)) + fadeIn(animationSpec = tween(220)),
-        exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(160)),
+        enter = expandVertically(animationSpec = bouncyExpand()) + fadeIn(animationSpec = tween(120)),
+        exit = shrinkVertically(animationSpec = tween(200)) + fadeOut(animationSpec = tween(140)),
     ) {
         Column(content = content)
     }

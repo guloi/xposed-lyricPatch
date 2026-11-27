@@ -22,6 +22,15 @@ fun <T> bouncy(): SpringSpec<T> = spring(
 )
 
 /**
+ * 条件展开（“打开某个开关后多出几行”）用的弹簧。
+ * 行程很短，用 bouncy() 那套阻尼根本看不出回弹，所以单独调强一点。
+ */
+fun <T> bouncyExpand(): SpringSpec<T> = spring(
+    dampingRatio = 0.55f,
+    stiffness = Spring.StiffnessMedium,
+)
+
+/**
  * 每次 key 变化都完整播一遍的“弹一下”，返回缩放系数：1.0 → 1 + amplitude → 1.0。
  *
  * 弹簧的过冲量和「剩余距离」成正比，连点时值已贴近目标，过冲就小到看不见；

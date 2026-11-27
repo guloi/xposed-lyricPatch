@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.*
 import com.lyricpatch.lib.color.ColorSpec
 import com.lyricpatch.lib.color.ColorStyle
+import com.lyricpatch.lib.list.COLOR_SPEC_OPTIONS
+import com.lyricpatch.lib.list.COLOR_STYLE_OPTIONS
 import com.lyricpatch.ui.UiPrefs
 
 /** 底边栏设置：外观、底栏样式和动画 */
@@ -26,9 +28,6 @@ import com.lyricpatch.ui.UiPrefs
 fun BottomBarPage(onBack: () -> Unit) {
     var pickStyle by remember { mutableStateOf(false) }
     var pickSpec by remember { mutableStateOf(false) }
-
-    val styleOptions = ColorStyle.entries.map { it.name to it.label }
-    val specOptions = ColorSpec.entries.map { it.name to it.label }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -139,7 +138,7 @@ fun BottomBarPage(onBack: () -> Unit) {
         if (pickStyle) {
             ChoiceDialog(
                 title = "色彩风格",
-                options = styleOptions,
+                options = COLOR_STYLE_OPTIONS,
                 selected = UiPrefs.colorStyle.name,
                 onDismiss = { pickStyle = false },
                 onSelect = { UiPrefs.updateColorStyle(ColorStyle.of(it)) },
@@ -148,7 +147,7 @@ fun BottomBarPage(onBack: () -> Unit) {
         if (pickSpec) {
             ChoiceDialog(
                 title = "色彩标准",
-                options = specOptions,
+                options = COLOR_SPEC_OPTIONS,
                 selected = UiPrefs.colorSpec.name,
                 onDismiss = { pickSpec = false },
                 onSelect = { UiPrefs.updateColorSpec(ColorSpec.of(it)) },

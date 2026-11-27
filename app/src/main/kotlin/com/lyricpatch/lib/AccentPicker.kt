@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import com.lyricpatch.ui.UiPrefs
 import com.lyricpatch.lib.color.accentColor
+import com.lyricpatch.lib.list.ACCENT_STYLES
+import com.lyricpatch.lib.list.AccentColor
 import java.util.Locale
 
 /**

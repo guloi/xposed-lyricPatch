@@ -1,4 +1,4 @@
-package com.lyricpatch.lib
+package com.lyricpatch.lib.list
 
 /** 调色板里的一个颜色 */
 data class AccentColor(val hex: String, val name: String)

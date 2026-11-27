@@ -4,6 +4,7 @@ import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.*
 import com.lyricpatch.lib.debug.CrashLogger
 import com.lyricpatch.ui.ConfigSession
+import com.lyricpatch.lib.list.LOG_LEVELS
+import com.lyricpatch.lib.list.MACHINE_MODES
 import com.lyricpatch.ui.ConfigStore
 import com.lyricpatch.ui.UiPrefs
 import kotlinx.coroutines.Dispatchers
@@ -261,7 +263,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         placeholder = "netease",
                         supporting = "内置：netease / qq / kugou / lrclib；也可以填 https:// 开头的自建源。从上往下一个一个试。",
                         onDismiss = { editing = false },
-                        onConfirm = { session.set(ConfKeys.PROVIDERS, it.joinToString(",")) },
+                        onConfirm = { session.set(ConfKeys.PROVIDERS, joinList(it)) },
                     )
                 }
             }
@@ -327,7 +329,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         placeholder = "netease",
                         supporting = "内置：netease / qq；也可以填 https:// 开头的自建源。留空则只用主源自带的翻译。",
                         onDismiss = { editProviders = false },
-                        onConfirm = { session.set(ConfKeys.TRANSLATION_PROVIDERS, it.joinToString(",")) },
+                        onConfirm = { session.set(ConfKeys.TRANSLATION_PROVIDERS, joinList(it)) },
                     )
                 }
                 if (editMode) {
@@ -441,10 +443,11 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         // 只在开启「跟随」时出现
                         AnimatedVisibility(
                             visible = session.flag(ConfKeys.WORD_SCROLL_FOLLOW),
-                            enter = expandVertically(animationSpec = bouncy()) +
-                                fadeIn(animationSpec = bouncy()),
-                            exit = shrinkVertically(animationSpec = bouncy()) +
-                                fadeOut(animationSpec = bouncy()),
+                            enter = expandVertically(animationSpec = bouncyExpand()) +
+                                fadeIn(animationSpec = tween(120)),
+                            // 收起保持 tween：弹簧收尾会“先慢慢追、再小过冲”，看着会顿一下
+                            exit = shrinkVertically(animationSpec = tween(180)) +
+                                fadeOut(animationSpec = tween(110)),
                         ) {
                             Column {
                                 RowDivider()
@@ -526,7 +529,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         placeholder = "moe.ouom.neriplayer",
                         supporting = "填应用包名（不是名称）。可以在系统设置 → 应用信息里看到，例如 moe.ouom.neriplayer。",
                         onDismiss = { editing = null },
-                        onConfirm = { session.set(editingKey, it.joinToString(",")) },
+                        onConfirm = { session.set(editingKey, joinList(it)) },
                     )
                 }
             }
@@ -621,19 +624,6 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
 }
 
 
-private val MACHINE_MODES = listOf(
-    "auto" to "跟随 ROM",
-    "source" to "源优先",
-    "off" to "禁用机翻",
-)
-
-private val LOG_LEVELS = listOf(
-    "silent" to "静默",
-    "info" to "信息",
-    "debug" to "调试",
-    "verbose" to "详细",
-)
-
 private fun saveLabel(saving: Boolean, savedAt: Long, error: String?): String = when {
     error != null -> "保存失败：$error"
     saving -> "正在保存…"
@@ -642,98 +632,3 @@ private fun saveLabel(saving: Boolean, savedAt: Long, error: String?): String = 
 }
 
 
-/** 一行一个的列表编辑器：不要再多行文本框 */
-@Composable
-private fun ListEditDialog(
-    title: String,
-    initial: String,
-    placeholder: String,
-    supporting: String,
-    onDismiss: () -> Unit,
-    onConfirm: (List<String>) -> Unit,
-) {
-    val items = remember {
-        mutableStateListOf<String>().apply {
-            addAll(initial.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() })
-            if (isEmpty()) add("")
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
-        text = {
-            Column {
-                Column(
-                    modifier = Modifier
-                        .heightIn(max = 260.dp)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    items.forEachIndexed { index, value ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = value,
-                                onValueChange = { items[index] = it },
-                                modifier = Modifier.weight(1f).padding(vertical = 3.dp),
-                                singleLine = true,
-                                shape = MaterialTheme.shapes.medium,
-                                placeholder = {
-                                    Text(
-                                        placeholder,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                            )
-                            IconButton(
-                                onClick = { items.removeAt(index) },
-                                enabled = items.size > 1,
-                            ) {
-                                Icon(
-                                    Icons.Filled.Close,
-                                    contentDescription = "删除这一行",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { items.add("") }) { Text("添加一行") }
-                    Text(
-                        "${items.count { it.isNotBlank() }} 项",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-
-                Text(
-                    supporting,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(items.map { it.trim() }.filter { it.isNotEmpty() })
-                    onDismiss()
-                },
-            ) { Text("确定") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
-    )
-}
-
-/** 名单类配置在右侧显示成「3 项」 */
-private fun entriesLabel(raw: String): String {
-    val n = raw.split(',', '\n').count { it.trim().isNotEmpty() }
-    return if (n == 0) "未设置" else "$n 项"
-}
