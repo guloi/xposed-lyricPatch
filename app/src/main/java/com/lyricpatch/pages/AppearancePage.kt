@@ -31,7 +31,7 @@ import com.lyricpatch.lib.color.ColorSpec
 import com.lyricpatch.lib.color.ColorStyle
 import com.lyricpatch.ui.UiPrefs
 
-/** 外观页：取色方式 / 大标题折叠 / 回弹幅度 / 保存条 */
+/** 外观页：取色方式 / 大标题折叠 / 回弹幅度 / 分组动画 */
 @Composable
 fun AppearancePage(onBack: () -> Unit) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { inner ->
@@ -141,15 +141,7 @@ fun AppearancePage(onBack: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
 
-            SettingsCard {
-                SwitchRow(
-                    title = "保存条上滑呼出",
-                    subtitle = "不常驻底部；上滑显示，下滑收起",
-                    checked = UiPrefs.floatingSaveBar,
-                    onCheckedChange = { UiPrefs.updateFloatingSaveBar(it) },
-                )
-            }
-            CardNote("开启后设置页底部不常驻保存条，上滑呼出。")
+            CardNote("外观偏好点击即生效并写入 ui_prefs；歌词配置在设置页里也是改动即保存。")
 
             Spacer(Modifier.height(24.dp))
         }

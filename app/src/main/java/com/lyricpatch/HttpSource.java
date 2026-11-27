@@ -2,6 +2,8 @@ package com.lyricpatch;
 
 import org.json.JSONObject;
 
+import java.util.Locale;
+
 /**
  * 自定义 HTTP 歌词源。
  * 走与 ROM 内置 HttpLyricSource 完全相同的协议：
@@ -24,21 +26,24 @@ public final class HttpSource {
             }
             if (Util.isEmpty(base)) return null;
 
-            String url = base + "/v1/lyrics?title=" + Util.enc(title)
-                    + "&artist=" + Util.enc(artist == null ? "" : artist)
-                    + "&album=" + Util.enc(album == null ? "" : album)
-                    + "&durationMs=" + Math.max(0, durationMs)
-                    + "&sourcePackage=" + Util.enc(pkg == null ? "" : pkg)
-                    + "&mediaId=" + Util.enc(mediaId == null ? "" : mediaId);
+            String url = base + String.format(Locale.ROOT, HttpLyricApi.QUERY,
+                    Util.enc(title),
+                    Util.enc(artist == null ? "" : artist),
+                    Util.enc(album == null ? "" : album),
+                    Math.max(0, durationMs),
+                    Util.enc(pkg == null ? "" : pkg),
+                    Util.enc(mediaId == null ? "" : mediaId));
 
             String res = Util.get(url, null);
             if (Util.isEmpty(res)) return null;
 
             JSONObject o = new JSONObject(res);
             LyricFetcher.Bundle b = new LyricFetcher.Bundle();
-            b.lrc = pick(o, "lrc", "lyric", "original");
-            b.yrc = pick(o, "yrc");
-            if (withTranslation) b.tlyric = pick(o, "tlyric", "translation", "translated");
+            b.lrc = pick(o, HttpLyricApi.KEY_LRC, HttpLyricApi.KEY_LYRIC,
+                    HttpLyricApi.KEY_ORIGINAL);
+            b.yrc = pick(o, HttpLyricApi.KEY_YRC);
+            if (withTranslation) b.tlyric = pick(o, HttpLyricApi.KEY_TLYRIC,
+                    HttpLyricApi.KEY_TRANSLATION, HttpLyricApi.KEY_TRANSLATED);
 
             if (b.empty()) {
                 Util.d("http source miss: " + base);

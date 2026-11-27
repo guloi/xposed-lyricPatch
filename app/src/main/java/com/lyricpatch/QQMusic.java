@@ -6,14 +6,6 @@ import org.json.JSONObject;
 /** QQ 音乐（非官方接口，只有行级歌词 + 翻译，没有逐字） */
 public final class QQMusic {
 
-    private static final String REFERER = "https://y.qq.com/";
-    private static final String SEARCH =
-            "https://c.y.qq.com/soso/fcgi-bin/client_search_cp"
-                    + "?w=%s&format=json&p=1&n=10&cr=1&aggr=1&lossless=0";
-    private static final String LYRIC =
-            "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg"
-                    + "?songmid=%s&format=json&nobase64=1&g_tk=5381";
-
     private QQMusic() {
     }
 
@@ -32,7 +24,7 @@ public final class QQMusic {
     private static LyricFetcher.Bundle searchOnce(String keyword, String title, String artist,
                                                   long durationMs, boolean withTranslation) {
         try {
-            String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+            String res = Util.get(String.format(QQMusicApi.SEARCH, Util.enc(keyword)), QQMusicApi.REFERER);
             if (Util.isEmpty(res)) return null;
 
             JSONObject data = new JSONObject(res).optJSONObject("data");
@@ -45,7 +37,7 @@ public final class QQMusic {
             String mid = pickBest(list, title, artist, durationMs);
             if (mid == null) return null;
 
-            String lyr = Util.get(String.format(LYRIC, Util.enc(mid)), REFERER);
+            String lyr = Util.get(String.format(QQMusicApi.LYRIC, Util.enc(mid)), QQMusicApi.REFERER);
             if (Util.isEmpty(lyr)) return null;
             JSONObject o = new JSONObject(lyr);
 
@@ -70,7 +62,7 @@ public final class QQMusic {
 
         for (String keyword : keywords) {
             try {
-                String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+                String res = Util.get(String.format(QQMusicApi.SEARCH, Util.enc(keyword)), QQMusicApi.REFERER);
                 if (Util.isEmpty(res)) continue;
 
                 JSONObject data = new JSONObject(res).optJSONObject("data");
@@ -83,7 +75,7 @@ public final class QQMusic {
                 String mid = pickBest(list, title, artist, durationMs);
                 if (mid == null) continue;
 
-                String lyr = Util.get(String.format(LYRIC, Util.enc(mid)), REFERER);
+                String lyr = Util.get(String.format(QQMusicApi.LYRIC, Util.enc(mid)), QQMusicApi.REFERER);
                 if (Util.isEmpty(lyr)) continue;
 
                 String tl = decode(new JSONObject(lyr).optString("trans", ""));

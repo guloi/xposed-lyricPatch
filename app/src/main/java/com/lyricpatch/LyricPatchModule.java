@@ -38,7 +38,7 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "4.74";
+    private static final String VERSION = "4.75";
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -936,7 +936,7 @@ public final class LyricPatchModule extends XposedModule {
      * 且目标语言是中文时，才回退用 Cue.translatedText（也就是我们给的网易云/QQ 翻译）。
      * 所以配了 translation_providers 却看不到效果，就是因为机翻把它盖住了。
      *
-     * 一份配置（lyricpatch.conf，热读，改完下次取词生效）：
+     * 一份配置（lyricpatch.json，热读，改完下次取词生效）：
      *   machine_translation=auto     ROM 原行为：机翻优先
      *   machine_translation=source   源里有翻译就用源里的，一行都没有才机翻兜底
      *   machine_translation=off      永不机翻（源没翻译的歌第二行就是空白）

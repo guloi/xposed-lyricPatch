@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 /**
  * 独立翻译源：歌词主源只管出词，翻译从这里单独拿。
  *
- * 配置（/data/local/tmp/lyricpatch.conf，chmod 644）：
+ * 配置（模块 App 内部存储的 lyricpatch.json，改动即时保存）：
  *   translation=true                 翻译总开关，false 就完全不去请求翻译
  *   translation_providers=netease    顺序尝试：netease / qq / http(s) 地址
  *
@@ -72,13 +72,13 @@ public final class TranslationSource {
 
     private static String fetchOne(String provider, String title, String artist, String album,
                                    long durationMs, String pkg, String mediaId) throws Exception {
-        if ("netease".equalsIgnoreCase(provider)) {
+        if (Providers.isNetease(provider)) {
             return Netease.tlyric(title, artist, durationMs, mediaId);
         }
-        if ("qq".equalsIgnoreCase(provider)) {
+        if (Providers.isQQ(provider)) {
             return QQMusic.tlyric(title, artist, durationMs);
         }
-        if (provider.startsWith("http://") || provider.startsWith("https://")) {
+        if (Providers.isHttp(provider)) {
             return http(provider, title, artist, album, durationMs, pkg, mediaId);
         }
         Util.w("unknown translation provider: " + provider);
@@ -97,22 +97,24 @@ public final class TranslationSource {
         String base = provider.trim();
         String url;
         if (base.contains("{")) {
-            url = base.replace("{title}", Util.enc(title))
-                    .replace("{artist}", Util.enc(nz(artist)))
-                    .replace("{album}", Util.enc(nz(album)))
-                    .replace("{durationMs}", String.valueOf(Math.max(0, durationMs)))
-                    .replace("{mediaId}", Util.enc(nz(mediaId)))
-                    .replace("{sourcePackage}", Util.enc(nz(pkg)));
+            url = base.replace(TranslationApi.PLACEHOLDER_TITLE, Util.enc(title))
+                    .replace(TranslationApi.PLACEHOLDER_ARTIST, Util.enc(nz(artist)))
+                    .replace(TranslationApi.PLACEHOLDER_ALBUM, Util.enc(nz(album)))
+                    .replace(TranslationApi.PLACEHOLDER_DURATION_MS,
+                            String.valueOf(Math.max(0, durationMs)))
+                    .replace(TranslationApi.PLACEHOLDER_MEDIA_ID, Util.enc(nz(mediaId)))
+                    .replace(TranslationApi.PLACEHOLDER_SOURCE_PACKAGE, Util.enc(nz(pkg)));
         } else {
             while (base.endsWith("/")) {
                 base = base.substring(0, base.length() - 1);
             }
-            url = base + "/v1/lyrics?title=" + Util.enc(title)
-                    + "&artist=" + Util.enc(nz(artist))
-                    + "&album=" + Util.enc(nz(album))
-                    + "&durationMs=" + Math.max(0, durationMs)
-                    + "&sourcePackage=" + Util.enc(nz(pkg))
-                    + "&mediaId=" + Util.enc(nz(mediaId));
+            url = base + String.format(Locale.ROOT, HttpLyricApi.QUERY,
+                    Util.enc(title),
+                    Util.enc(nz(artist)),
+                    Util.enc(nz(album)),
+                    Math.max(0, durationMs),
+                    Util.enc(nz(pkg)),
+                    Util.enc(nz(mediaId)));
         }
 
         String res = Util.get(url, null);
@@ -121,7 +123,8 @@ public final class TranslationSource {
         String body = res.trim();
         if (!body.startsWith("{")) return body;    // 直接吐 LRC 也认
 
-        String tl = HttpSource.pick(new JSONObject(body), "tlyric", "translation", "translated");
+        String tl = HttpSource.pick(new JSONObject(body), HttpLyricApi.KEY_TLYRIC,
+                HttpLyricApi.KEY_TRANSLATION, HttpLyricApi.KEY_TRANSLATED);
         return Util.isEmpty(tl) ? null : tl;
     }
 

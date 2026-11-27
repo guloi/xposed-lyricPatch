@@ -6,33 +6,13 @@ import org.json.JSONObject;
 /** 网易云音乐（主） + LRCLIB（备） */
 public final class Netease {
 
-    private static final String REFERER = "https://music.163.com/";
-    private static final String SEARCH =
-            "https://music.163.com/api/search/get?s=%s&type=1&offset=0&limit=10";
-    private static final String LYRIC =
-            "https://music.163.com/api/song/lyric?id=%s&lv=-1&kv=-1&tv=-1&yv=-1&rv=-1";
-
-    /** 新版歌词接口：部分歌只有它才返回逐字 yrc / 逐字翻译 ytlrc */
-    private static final String LYRIC_V1 =
-            "https://music.163.com/api/song/lyric/v1?id=%s&cp=false"
-                    + "&lv=-1&kv=-1&tv=-1&rv=-1&yv=-1&ytv=-1&yrv=-1";
-
-    /** PC 客户端参数：部分歌的 yrc 只在这里给 */
-    private static final String LYRIC_PC =
-            "https://music.163.com/api/song/lyric?os=pc&id=%s&lv=-1&kv=0&tv=-1&yv=-1";
-    private static final String DETAIL =
-            "https://music.163.com/api/song/detail?ids=%5B%s%5D";
-    private static final String LRCLIB_GET =
-            "https://lrclib.net/api/get?track_name=%s&artist_name=%s&album_name=%s&duration=%d";
-    private static final String LRCLIB_SEARCH = "https://lrclib.net/api/search?q=%s";
-
     private Netease() {
     }
 
     /** 直接按网易云歌曲 id 取词 */
     public static LyricFetcher.Bundle byId(String id, boolean withTranslation) {
         try {
-            String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
+            String res = Util.get(String.format(NeteaseApi.LYRIC, Util.enc(id)), NeteaseApi.REFERER);
             return enrich(id, parseLyric(res, withTranslation), withTranslation);
         } catch (Throwable t) {
             Util.logw("netease byId failed", t);
@@ -51,10 +31,10 @@ public final class Netease {
 
         // 依次试两个接口，谁先给出逐字就用谁
         if (Util.isEmpty(b.yrc)) {
-            merge(b, fetchLyric(LYRIC_V1, id, withTranslation), withTranslation, "lyric/v1");
+            merge(b, fetchLyric(NeteaseApi.LYRIC_V1, id, withTranslation), withTranslation, "lyric/v1");
         }
         if (Util.isEmpty(b.yrc)) {
-            merge(b, fetchLyric(LYRIC_PC, id, withTranslation), withTranslation, "lyric?os=pc");
+            merge(b, fetchLyric(NeteaseApi.LYRIC_PC, id, withTranslation), withTranslation, "lyric?os=pc");
         }
         if (Util.isEmpty(b.yrc)) {
             Util.d("netease 无逐字歌词: id=" + id);
@@ -89,7 +69,7 @@ public final class Netease {
     private static LyricFetcher.Bundle fetchLyric(String urlFmt, String id,
                                                  boolean withTranslation) {
         try {
-            String res = Util.get(String.format(urlFmt, Util.enc(id)), REFERER);
+            String res = Util.get(String.format(urlFmt, Util.enc(id)), NeteaseApi.REFERER);
             if (Util.isEmpty(res)) return null;
 
             JSONObject root = new JSONObject(res);
@@ -112,7 +92,7 @@ public final class Netease {
     public static LyricFetcher.Bundle byIdVerified(String id, String title,
                                                    boolean withTranslation) {
         try {
-            String detail = Util.get(String.format(DETAIL, Util.enc(id)), REFERER);
+            String detail = Util.get(String.format(NeteaseApi.DETAIL, Util.enc(id)), NeteaseApi.REFERER);
             if (!Util.isEmpty(detail)) {
                 JSONArray arr = new JSONObject(detail).optJSONArray("songs");
                 if (arr != null && arr.length() > 0) {
@@ -148,7 +128,7 @@ public final class Netease {
     private static LyricFetcher.Bundle searchOnce(String keyword, String title, String artist,
                                                   long durationMs, boolean withTranslation) {
         try {
-            String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+            String res = Util.get(String.format(NeteaseApi.SEARCH, Util.enc(keyword)), NeteaseApi.REFERER);
             if (Util.isEmpty(res)) return null;
 
             JSONObject result = new JSONObject(res).optJSONObject("result");
@@ -159,7 +139,7 @@ public final class Netease {
             String id = pickBest(songs, title, artist, durationMs);
             if (id == null) return null;
 
-            String lyric = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
+            String lyric = Util.get(String.format(NeteaseApi.LYRIC, Util.enc(id)), NeteaseApi.REFERER);
             LyricFetcher.Bundle bundle = enrich(id, parseLyric(lyric, withTranslation),
                     withTranslation);
             if (bundle != null) {
@@ -175,7 +155,7 @@ public final class Netease {
     public static LyricFetcher.Bundle lrcLib(String title, String artist, String album,
                                              long durationMs) {
         try {
-            String url = String.format(LRCLIB_GET,
+            String url = String.format(LrcLibApi.GET,
                     Util.enc(title),
                     Util.enc(artist == null ? "" : artist),
                     Util.enc(album == null ? "" : album),
@@ -184,7 +164,7 @@ public final class Netease {
             if (bundle != null) return bundle;
 
             String q = Util.enc((Util.isEmpty(artist) ? "" : artist + " ") + title);
-            String res = Util.get(String.format(LRCLIB_SEARCH, q), null);
+            String res = Util.get(String.format(LrcLibApi.SEARCH, q), null);
             if (Util.isEmpty(res)) return null;
 
             JSONArray arr = new JSONArray(res);
@@ -254,7 +234,7 @@ public final class Netease {
                     : new String[]{title + " " + artist, title};
 
             for (String keyword : keywords) {
-                String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+                String res = Util.get(String.format(NeteaseApi.SEARCH, Util.enc(keyword)), NeteaseApi.REFERER);
                 if (Util.isEmpty(res)) continue;
 
                 JSONObject result = new JSONObject(res).optJSONObject("result");
@@ -279,7 +259,7 @@ public final class Netease {
 
     private static String tlyricById(String id) {
         try {
-            String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
+            String res = Util.get(String.format(NeteaseApi.LYRIC, Util.enc(id)), NeteaseApi.REFERER);
             if (Util.isEmpty(res)) return null;
             String tl = sub(new JSONObject(res), "tlyric");
             return Util.isEmpty(tl) ? null : tl;
@@ -292,13 +272,13 @@ public final class Netease {
     public static String yrcById(String id) {
         if (Util.isEmpty(id)) return null;
         try {
-            LyricFetcher.Bundle b = fetchLyric(LYRIC_V1, id, false);
+            LyricFetcher.Bundle b = fetchLyric(NeteaseApi.LYRIC_V1, id, false);
             if (b != null && !Util.isEmpty(b.yrc)) return b.yrc;
 
-            b = fetchLyric(LYRIC_PC, id, false);
+            b = fetchLyric(NeteaseApi.LYRIC_PC, id, false);
             if (b != null && !Util.isEmpty(b.yrc)) return b.yrc;
 
-            String res = Util.get(String.format(LYRIC, Util.enc(id)), REFERER);
+            String res = Util.get(String.format(NeteaseApi.LYRIC, Util.enc(id)), NeteaseApi.REFERER);
             String y = sub(new JSONObject(res), "yrc");
             return Util.isEmpty(y) ? null : y;
         } catch (Throwable t) {
@@ -315,7 +295,7 @@ public final class Netease {
                     : new String[]{title + " " + artist, title};
 
             for (String keyword : keywords) {
-                String res = Util.get(String.format(SEARCH, Util.enc(keyword)), REFERER);
+                String res = Util.get(String.format(NeteaseApi.SEARCH, Util.enc(keyword)), NeteaseApi.REFERER);
                 if (Util.isEmpty(res)) continue;
 
                 JSONObject result = new JSONObject(res).optJSONObject("result");

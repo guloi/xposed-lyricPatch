@@ -95,15 +95,15 @@ public final class LyricFetcher {
                 if (provider.isEmpty()) continue;
                 if (Thread.currentThread().isInterrupted()) return null;
                 try {
-                    if ("netease".equalsIgnoreCase(provider)) {
+                    if (Providers.isNetease(provider)) {
                         bundle = Netease.search(title, artist, durationMs, withTranslation);
-                    } else if ("lrclib".equalsIgnoreCase(provider)) {
+                    } else if (Providers.isLrcLib(provider)) {
                         bundle = Netease.lrcLib(title, artist, album, durationMs);
-                    } else if ("qq".equalsIgnoreCase(provider)) {
+                    } else if (Providers.isQQ(provider)) {
                         bundle = QQMusic.search(title, artist, durationMs, withTranslation);
-                    } else if ("kugou".equalsIgnoreCase(provider)) {
+                    } else if (Providers.isKugou(provider)) {
                         bundle = Kugou.fetch(title, artist, durationMs);
-                    } else if (provider.startsWith("http://") || provider.startsWith("https://")) {
+                    } else if (Providers.isHttp(provider)) {
                         bundle = HttpSource.fetch(provider, title, artist, album, durationMs,
                                 packageName, mediaId, withTranslation);
                     } else {

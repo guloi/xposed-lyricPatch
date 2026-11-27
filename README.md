@@ -104,10 +104,42 @@ translation_providers=https://my.server
 响应可以是 JSON（取 `tlyric` / `translation` / `translated`，兼容嵌套 `{"tlyric":{"lyric":"..."}}`），
 也可以直接返回 LRC 文本。
 
+## 配置存储与界面
+
+配置不再用 `key=value`，改为 JSON（schema 2），文件在模块 App 自己的内部存储：
+
+```
+/data/user/0/com.lyricpatch/files/lyricpatch.json
+```
+
+```json
+{
+  "schema": 2,
+  "appVersion": "4.75",
+  "updatedAt": 1764…,
+  "values": {
+    "providers": "netease,lrclib",
+    "translation": "true"
+  }
+}
+```
+
+- 读取时缺的键自动补默认值，页面拿到的永远是完整配置；手写进去的未知键会原样保留；
+- 写入先写 `.tmp`、`fsync` 再 `rename`，SystemUI 随时来读都不会读到半截文件；
+- 旧版 `lyricpatch.conf` 仍能读，首次打开 App 会自动迁移成 JSON 并删掉旧文件；
+- `Util` 侧同时认 JSON 和旧 `key=value`，热更新期间不会出现读不到配置的空窗；
+- 改动**即时保存**：开关、选项、输入、滑杆操作后合并写入（约 180 ms），
+  保存完广播 `com.lyricpatch.CONFIG_CHANGED`，不需要手动点保存，也不需要重启 SystemUI；
+- 首页展示启用状态、SystemUI 侧版本、快捷开关，并支持「恢复默认设置」
+  （歌词配置 + 界面偏好一起重置）；
+- 设置页顶部分类条按「全部 / 歌词 / 显示 / 应用 / 模块」筛选设置组；
+  「其他设置 → 导出配置」用系统文件选择器把当前 JSON 保存到任意位置（无需存储权限）。
+
 ## 代码结构
 
 ```
 app/src/main/java/com/lyricpatch/
+├─ api.kt      网易云 / LRCLIB / QQ / 酷狗 / 自定义 HTTP 的接口地址与参数
 ├─ lib/        跨文件复用的组件与工具（一组件一文件，可继续建子目录）
 ├─ pages/      页面（一个页面一个文件，Activity 只做壳）
 └─ ui/         Activity / 主题 / 配置读写 / 崩溃记录
@@ -120,7 +152,9 @@ app/src/main/java/com/lyricpatch/
 3. 页面独有、与页面 state 强耦合的组件留在 `pages`；
 4. 新增开关 / 配置项时，先看 `lib/Keys.kt` 和其他文件已有的声明方式，按同一规则补：
    面向 SystemUI 的写进 `ConfKeys`（同步 `ConfigStore.ORDER` / `DEFAULTS`），
-   纯界面偏好写进 `UiKeys`；页面里一律用 `ConfKeys.XXX` 访问，不在调用点写字面量。
+   纯界面偏好写进 `UiKeys`；页面里一律用 `ConfKeys.XXX` 访问，不在调用点写字面量；
+5. 新增或修改第三方歌词接口时只改 `api.kt`，请求与解析逻辑留在各自的源类里。
+
    
 ## 自定义源
 

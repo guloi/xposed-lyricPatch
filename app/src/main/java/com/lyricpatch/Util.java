@@ -9,11 +9,14 @@ import android.util.Log;
 
 import com.lyricpatch.lib.ConfKeys;
 
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
@@ -428,10 +431,19 @@ public final class Util {
         }
     }
 
-    /** 自己解 key=value：不用 Properties.load，省得值里的反斜杠/冒号被当转义 */
+    /**
+     * 配置文本：新版是 JSON（`{"values":{...}}`），旧版是 key=value。
+     * 两种都认，所以 App 升级 / 热更新期间不会出现“读不到配置”的空窗。
+     */
     private static Properties parseConf(String text) {
+        String body = text == null ? "" : text.trim();
+        if (body.startsWith("{")) {
+            Properties json = parseJsonConf(body);
+            if (json != null) return json;
+        }
+        // 旧版 key=value：不用 Properties.load，省得值里的反斜杠/冒号被当转义
         Properties p = new Properties();
-        for (String raw : text.split("\\r?\n")) {
+        for (String raw : body.split("\\r?\n")) {
             String line = raw.trim();
             if (line.isEmpty() || line.startsWith("#") || line.startsWith("!")) continue;
             int eq = line.indexOf('=');
@@ -439,6 +451,43 @@ public final class Util {
             p.setProperty(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
         }
         return p;
+    }
+
+    /** 解析模块 App 写出的 JSON；顶层没有 values 时也兼容直接铺开的键 */
+    private static Properties parseJsonConf(String text) {
+        try {
+            JSONObject root = new JSONObject(text);
+            JSONObject values = root.optJSONObject("values");
+            boolean flat = values == null;
+            JSONObject source = flat ? root : values;
+            Properties p = new Properties();
+            Iterator<String> keys = source.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (flat && ("schema".equals(key) || "appVersion".equals(key)
+                        || "updatedAt".equals(key) || "values".equals(key))) {
+                    continue;
+                }
+                Object value = source.opt(key);
+                if (value == null || value == JSONObject.NULL) continue;
+                p.setProperty(key, jsonText(value).trim());
+            }
+            return p;
+        } catch (Throwable t) {
+            logw("parse json conf failed", t);
+            return null;
+        }
+    }
+
+    /** JSON 里的 bool / number 统一成字符串，后面照旧按字符串读 */
+    private static String jsonText(Object value) {
+        if (value instanceof Boolean) return ((Boolean) value) ? "true" : "false";
+        if (value instanceof Number) {
+            double d = ((Number) value).doubleValue();
+            if (d == (long) d) return Long.toString((long) d);
+            return value.toString();
+        }
+        return String.valueOf(value);
     }
 
     static String conf(String key, String def) {

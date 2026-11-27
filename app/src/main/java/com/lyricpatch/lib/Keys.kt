@@ -1,7 +1,7 @@
 package com.lyricpatch.lib
 
 /**
- * lyricpatch.conf 里所有键的声明处。
+ * lyricpatch.json 里所有键的声明处。
  *
  * 模块侧（Java）读的是同一批字符串，改键名时要同步 Util / LyricScroll 里的字面量。
  */
@@ -44,7 +44,6 @@ object UiKeys {
     const val COLLAPSIBLE = "collapsible_sections"
     const val COLLAPSE_BY_DEFAULT = "collapse_by_default"
     const val SECTIONS_SEEN = "sections_seen"
-    const val FLOATING_SAVE_BAR = "floating_save_bar"
     const val BOUNCE = "bounce_percent"
     const val COLOR_STYLE = "color_style"
     const val COLOR_SPEC = "color_spec"

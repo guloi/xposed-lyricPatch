@@ -10,7 +10,7 @@ import android.os.SystemClock
 /**
  * 模块 App ↔ SystemUI 的配置通道，另外兼一个“心跳”接口。
  *
- *  - read   ：SystemUI 侧的 hook 来拿配置（内部存储是私有的，直接读文件会被权限和 SELinux 拦住）
+ *  - read   ：SystemUI 侧的 hook 来拿配置文本（JSON；没有 JSON 时退回旧 conf）
  *  - report ：hook 装上了 / 收到 ping 时回写一次，界面拿它显示“已启用”
  *  - status ：（可选）读当前报活信息
  *
@@ -45,16 +45,11 @@ class ConfigProvider : ContentProvider() {
             reply.putBoolean("ok", false)
             return
         }
-        val target = ConfigStore.file(ctx)
-        val exists = target.isFile
-        val text = if (exists) {
-            runCatching { target.readText() }.getOrDefault("")
-        } else {
-            ""
-        }
+        val raw = ConfigStore.rawText(ctx)
         reply.putBoolean("ok", true)
-        reply.putString("text", text)
-        reply.putLong("mtime", if (exists) target.lastModified() else 0L)
+        reply.putString("text", raw.text)
+        reply.putLong("mtime", raw.mtime)
+        reply.putString("format", if (raw.json) "json" else "conf")
     }
 
     override fun query(

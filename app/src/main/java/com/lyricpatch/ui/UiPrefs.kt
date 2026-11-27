@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * 纯界面偏好，与给 SystemUI 看的 lyricpatch.conf 分开存，避免污染那份配置。
+ * 纯界面偏好，与给 SystemUI 看的 lyricpatch.json 分开存，避免污染那份配置。
  * 用 Compose 的 state 保存，改完两个 Activity 会同时刷新。
  */
 object UiPrefs {
@@ -20,23 +20,19 @@ object UiPrefs {
     private const val KEY_DYNAMIC = UiKeys.DYNAMIC_COLOR
     private const val KEY_ACCENT = UiKeys.ACCENT
     private const val KEY_COLLAPSE = UiKeys.COLLAPSIBLE
-    private const val KEY_FLOATING_BAR = UiKeys.FLOATING_SAVE_BAR
     private const val KEY_BOUNCE = UiKeys.BOUNCE
     private const val KEY_COLLAPSE_DEFAULT = UiKeys.COLLAPSE_BY_DEFAULT
     private const val KEY_SECTIONS_SEEN = UiKeys.SECTIONS_SEEN
     private const val KEY_SECTION_PREFIX = UiKeys.SECTION_PREFIX
 
     const val DEFAULT_ACCENT = "#5B4BC6"
+    const val DEFAULT_BOUNCE = 18
 
     var dynamicColor by mutableStateOf(true)
         private set
     var accent by mutableStateOf(DEFAULT_ACCENT)
         private set
     var collapsible by mutableStateOf(true)
-        private set
-
-    /** 保存条不常驻：跟随列表上滑显示、下滑隐藏 */
-    var floatingSaveBar by mutableStateOf(false)
         private set
 
     /** 首次启动 App 时，各分组是否默认折叠 */
@@ -48,7 +44,7 @@ object UiPrefs {
         private set
 
     /** 回弹幅度（百分比），0 = 关闭 */
-    var bouncePercent by mutableStateOf(18)
+    var bouncePercent by mutableStateOf(DEFAULT_BOUNCE)
         private set
 
     /** 色彩风格 / 色彩标准：仅在关闭莫奈取色、使用自定义颜色时生效 */
@@ -78,8 +74,7 @@ object UiPrefs {
         dynamicColor = p.getBoolean(KEY_DYNAMIC, true)
         accent = p.getString(KEY_ACCENT, DEFAULT_ACCENT) ?: DEFAULT_ACCENT
         collapsible = p.getBoolean(KEY_COLLAPSE, true)
-        floatingSaveBar = p.getBoolean(KEY_FLOATING_BAR, false)
-        bouncePercent = p.getInt(KEY_BOUNCE, 18).coerceIn(0, 30)
+        bouncePercent = p.getInt(KEY_BOUNCE, DEFAULT_BOUNCE).coerceIn(0, 30)
         colorStyle = ColorStyle.of(p.getString(UiKeys.COLOR_STYLE, null))
         colorSpec = ColorSpec.of(p.getString(UiKeys.COLOR_SPEC, null))
         sectionLegacyAnim = p.getBoolean(UiKeys.SECTION_LEGACY_ANIM, false)
@@ -139,11 +134,6 @@ object UiPrefs {
         prefs?.edit()?.putInt(KEY_BOUNCE, bouncePercent)?.apply()
     }
 
-    fun updateFloatingSaveBar(on: Boolean) {
-        floatingSaveBar = on
-        prefs?.edit()?.putBoolean(KEY_FLOATING_BAR, on)?.apply()
-    }
-
     fun updateDynamicColor(on: Boolean) {
         dynamicColor = on
         prefs?.edit()?.putBoolean(KEY_DYNAMIC, on)?.apply()
@@ -157,5 +147,27 @@ object UiPrefs {
     fun updateCollapsible(on: Boolean) {
         collapsible = on
         prefs?.edit()?.putBoolean(KEY_COLLAPSE, on)?.apply()
+    }
+
+    /**
+     * 完整重置界面偏好：清掉 ui_prefs 并把内存里的状态恢复默认。
+     * 分组展开记录也一起清掉，下次进设置页重新按「默认折叠」初始化。
+     */
+    fun reset(context: Context) {
+        val p = prefs ?: context.applicationContext
+            .getSharedPreferences(FILE, Context.MODE_PRIVATE)
+            .also { prefs = it }
+        p.edit().clear().apply()
+
+        dynamicColor = true
+        accent = DEFAULT_ACCENT
+        collapsible = true
+        collapseByDefault = true
+        sectionsSeen = false
+        bouncePercent = DEFAULT_BOUNCE
+        colorStyle = ColorStyle.EXPRESSIVE
+        colorSpec = ColorSpec.SPEC_2025
+        sectionLegacyAnim = false
+        sectionHeaderPop = true
     }
 }

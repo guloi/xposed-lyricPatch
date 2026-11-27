@@ -28,13 +28,6 @@ import java.util.zip.InflaterInputStream;
  */
 public final class Kugou {
 
-    private static final String SEARCH =
-            "https://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=%s&duration=%d&hash=";
-    private static final String DOWNLOAD =
-            "https://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=krc&charset=utf8";
-
-    private static final String REFERER = "https://www.kugou.com/";
-
     /** KRC 解密密钥 */
     private static final int[] KEY = {
             0x40, 0x47, 0x61, 0x77, 0x5e, 0x32, 0x74, 0x47,
@@ -64,8 +57,8 @@ public final class Kugou {
     private static LyricFetcher.Bundle tryKeyword(String keyword, String title, String artist,
                                                  long durationMs) {
         try {
-            String res = Util.get(String.format(Locale.ROOT, SEARCH,
-                    Util.enc(keyword), Math.max(0L, durationMs)), REFERER);
+            String res = Util.get(String.format(Locale.ROOT, KugouApi.SEARCH,
+                    Util.enc(keyword), Math.max(0L, durationMs)), KugouApi.REFERER);
             if (Util.isEmpty(res)) {
                 Util.d("kugou search empty: " + keyword);
                 return null;
@@ -93,8 +86,8 @@ public final class Kugou {
             Util.d("kugou pick: " + best.optString("song", "?") + " / "
                     + best.optString("singer", "?"));
 
-            String dl = Util.get(String.format(Locale.ROOT, DOWNLOAD,
-                    Util.enc(id), Util.enc(accesskey)), REFERER);
+            String dl = Util.get(String.format(Locale.ROOT, KugouApi.DOWNLOAD,
+                    Util.enc(id), Util.enc(accesskey)), KugouApi.REFERER);
             if (Util.isEmpty(dl)) {
                 Util.d("kugou download empty");
                 return null;

@@ -16,7 +16,7 @@ class SettingsActivity : ComponentActivity() {
         UiPrefs.load(this)
         setContent {
             LyricPatchTheme {
-                SettingsPage()
+                SettingsPage(onBack = { finish() })
             }
         }
     }
