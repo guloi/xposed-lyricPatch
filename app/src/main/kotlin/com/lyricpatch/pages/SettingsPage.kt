@@ -1,5 +1,7 @@
 package com.lyricpatch.pages
 
+import android.content.Intent
+import android.net.Uri
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +38,7 @@ import com.lyricpatch.lib.list.LOG_LEVELS
 import com.lyricpatch.lib.list.MACHINE_MODES
 import com.lyricpatch.ui.ConfigStore
 import com.lyricpatch.ui.UiPrefs
+import com.lyricpatch.ui.UpdateChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -56,6 +59,9 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showReset by remember { mutableStateOf(false) }
+    // 更新检测：只查 GitHub latest，不自动下载
+    var updateText by remember { mutableStateOf("点击检查最新版本") }
+    var updateUrl by remember { mutableStateOf<String?>(null) }
 
     // 正常从 MainPage 进来时已经加载过；直接启动详情页时兜底读一次
     LaunchedEffect(Unit) {
@@ -152,6 +158,32 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
 
     fun launchImport() {
         importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+    }
+
+    fun checkUpdate() {
+        val ready = updateUrl
+        if (ready != null) {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ready))) }
+            return
+        }
+        updateText = "检查中…"
+        scope.launch {
+            // 安装时间用来判断 ci 有没有比当前这份 APK 更新的构建
+            val installedAt = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+            }.getOrDefault(0L)
+            val release = UpdateChecker.check(version, installedAt, UiPrefs.updateCheckCi)
+            if (release == null) {
+                updateText = "已是最新版本"
+            } else {
+                updateUrl = release.pageUrl
+                updateText = if (release.isCi) {
+                    "发现新的 ci 构建，点击查看"
+                } else {
+                    "发现 ${release.tag}，点击查看"
+                }
+            }
+        }
     }
 
     if (showReset) {
@@ -539,6 +571,20 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             item { SectionLabel("其他设置") }
             item {
                 SettingsCard {
+                    SwitchRow(
+                        title = "检测更新",
+                        subtitle = "在模块页底部显示「检查更新」",
+                        checked = UiPrefs.updateCheck,
+                        onCheckedChange = { UiPrefs.updateUpdateCheck(it) },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "检测 CI 构建",
+                        subtitle = "把每次 push 的 ci 构建也算作更新",
+                        checked = UiPrefs.updateCheckCi,
+                        onCheckedChange = { UiPrefs.updateUpdateCheckCi(it) },
+                    )
+                    RowDivider()
                     ActionRow(
                         title = "导入配置",
                         subtitle = "从 JSON 文件恢复，只认已登记的项",
@@ -607,16 +653,25 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             item {
                 CardNote("改完就生效，不用保存，也不用重启系统界面。")
             }
-            // 版本号只在「模块」页露出来，其它分类页不占地方
+            // 版本号 + 检查更新只在「模块」页露出来，其它分类页不占地方
             if (catalog.title == "模块") {
                 item {
-                    Text(
-                        "LyricPatch v$version",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.outline,
+                    Column(
                         modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
-                        textAlign = TextAlign.Center,
-                    )
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            "LyricPatch v$version",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                            textAlign = TextAlign.Center,
+                        )
+                        if (UiPrefs.updateCheck) {
+                            TextButton(onClick = { checkUpdate() }) {
+                                Text(updateText, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
                 }
             }
         }

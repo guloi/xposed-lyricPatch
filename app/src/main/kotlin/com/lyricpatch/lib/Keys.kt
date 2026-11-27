@@ -53,4 +53,9 @@ object UiKeys {
     const val HOME_GRADIENT = "home_gradient"
     const val TAB_ANIMATION = "tab_animation"
     const val PAGE_TRANSITION = "page_transition"
+
+    /** 是否启用更新检测（模块页底部的「检查更新」） */
+    const val UPDATE_CHECK = "update_check"
+    /** 把每次 push 自动更新的 ci 构建也算作“有新版” */
+    const val UPDATE_CHECK_CI = "update_check_ci"
 }

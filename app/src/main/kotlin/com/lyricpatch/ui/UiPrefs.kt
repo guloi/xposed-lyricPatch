@@ -50,6 +50,12 @@ object UiPrefs {
     var pageTransition by mutableStateOf(true)
         private set
 
+    // 更新检测
+    var updateCheck by mutableStateOf(true)
+        private set
+    var updateCheckCi by mutableStateOf(false)
+        private set
+
     val bounceScale: Float
         get() = bouncePercent / 100f
 
@@ -70,6 +76,8 @@ object UiPrefs {
         homeGradient = p.getBoolean(UiKeys.HOME_GRADIENT, false)
         tabAnimation = p.getBoolean(UiKeys.TAB_ANIMATION, true)
         pageTransition = p.getBoolean(UiKeys.PAGE_TRANSITION, true)
+        updateCheck = p.getBoolean(UiKeys.UPDATE_CHECK, true)
+        updateCheckCi = p.getBoolean(UiKeys.UPDATE_CHECK_CI, false)
     }
 
     fun updateDynamicColor(on: Boolean) {
@@ -127,6 +135,16 @@ object UiPrefs {
         prefs?.edit()?.putBoolean(UiKeys.PAGE_TRANSITION, on)?.apply()
     }
 
+    fun updateUpdateCheck(on: Boolean) {
+        updateCheck = on
+        prefs?.edit()?.putBoolean(UiKeys.UPDATE_CHECK, on)?.apply()
+    }
+
+    fun updateUpdateCheckCi(on: Boolean) {
+        updateCheckCi = on
+        prefs?.edit()?.putBoolean(UiKeys.UPDATE_CHECK_CI, on)?.apply()
+    }
+
     /** 完整重置界面偏好：清掉 ui_prefs，并把内存里的状态恢复默认 */
     fun reset(context: Context) {
         val p = prefs ?: context.applicationContext
@@ -145,5 +163,7 @@ object UiPrefs {
         homeGradient = false
         tabAnimation = true
         pageTransition = true
+        updateCheck = true
+        updateCheckCi = false
     }
 }

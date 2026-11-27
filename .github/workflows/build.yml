@@ -103,6 +103,10 @@ jobs:
           tag_name: ci
           name: CI 构建
           prerelease: true
+          # 同名 asset 直接覆盖，不让旧 APK 累积
+          overwrite_files: true
+          # ci 永远不抢 Latest
+          make_latest: false
           fail_on_unmatched_files: false
           body: |
             此为 CI 自动构建，不是正式发布版本。
@@ -118,6 +122,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.name != '' && steps.tag.outputs.name || github.ref_name }}
           name: ${{ steps.tag.outputs.name != '' && steps.tag.outputs.name || github.ref_name }}
+          overwrite_files: true
           make_latest: true
           generate_release_notes: true
           fail_on_unmatched_files: false
