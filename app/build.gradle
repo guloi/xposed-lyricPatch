@@ -43,9 +43,11 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            // 有正式 key 就用它，否则退回 debug（fork / 无 secrets 时也能出包）
+            // 有正式 key 就用它，否则退回 debug（fork / 无 secrets 时也能出包）。
+            // 注意必须用赋值：写成 signingConfig (... ? ...) Groovy 会当成方法调用，
+            // 把 Boolean 当参数塞给 setSigningConfig，直接 ClassCastException。
             def ks = System.getenv("KEYSTORE_FILE")
-            signingConfig (ks != null && file(ks).exists())
+            signingConfig = (ks != null && file(ks).exists())
                     ? signingConfigs.release : signingConfigs.debug
         }
     }

@@ -5,6 +5,11 @@ on:
     branches: ['**']
     tags: ['*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag（填了就发 latest，留空只更新 ci 预发布）'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -14,6 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      # 手动运行时可以把 tag 写在输入框里；push 触发时这里是空的
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          name="$(echo "${{ inputs.tag }}" | tr -d '[:space:]')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v5
         with:
@@ -82,9 +95,9 @@ jobs:
           name: LyricPatch-apk
           path: app/build/outputs/apk/release/*.apk
 
-      # 分支 push / 手动触发：覆盖同一个 ci 预发布，永远指向最新一次构建
+      # 分支 push / 手动运行但没填 tag：覆盖同一个 ci 预发布
       - name: Publish CI build
-        if: github.ref_type == 'branch'
+        if: github.ref_type == 'branch' && steps.tag.outputs.name == ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ci
@@ -98,13 +111,13 @@ jobs:
             分支：`${{ github.ref_name }}`
           files: app/build/outputs/apk/release/*.apk
 
-      # 打 tag：发正式 release，并设为 latest
+      # 推 tag，或手动运行填了 tag：发正式 release，并设为 latest
       - name: Publish release
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || steps.tag.outputs.name != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.name != '' && steps.tag.outputs.name || github.ref_name }}
+          name: ${{ steps.tag.outputs.name != '' && steps.tag.outputs.name || github.ref_name }}
           make_latest: true
           generate_release_notes: true
           fail_on_unmatched_files: false
