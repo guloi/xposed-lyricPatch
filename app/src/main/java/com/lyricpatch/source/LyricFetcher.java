@@ -93,14 +93,28 @@ public final class LyricFetcher {
         return body.substring(i).trim();
     }
 
-    /** 首行正文等于歌名就删掉这一行 */
+    /**
+     * 首行像歌名就删掉。
+     * 网易云回的 yrc 开头经常是「歌名」或者「歌名 - 歌手」，不完全相等，所以三段判断都上。
+     */
     private static String dropTitleLineIf(String text, String normalizedTitle) {
         if (Util.isEmpty(text)) return text;
         int nl = text.indexOf('\n');
         String first = nl < 0 ? text : text.substring(0, nl);
         String body = lineBody(first);
         // 空行不动，ROM 自己会跳过
-        if (body.isEmpty() || !Util.norm(body).equals(normalizedTitle)) return text;
+        if (body.isEmpty()) return text;
+
+        String normalized = Util.norm(body);
+        double score = Util.similarity(normalized, normalizedTitle);
+        boolean same = normalized.equals(normalizedTitle)
+                // 容一点尾巴（「 - Artist」「【】」之类）
+                || (normalized.contains(normalizedTitle)
+                && normalized.length() - normalizedTitle.length() <= 12)
+                || score >= 0.85f;
+        if (!same) return text;
+
+        Util.d("drop title line: «" + body + "» score=" + String.format(Locale.ROOT, "%.2f", score));
         return nl < 0 ? "" : text.substring(nl + 1);
     }
 
