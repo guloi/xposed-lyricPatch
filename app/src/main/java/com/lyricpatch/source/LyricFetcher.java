@@ -63,7 +63,10 @@ public final class LyricFetcher {
     private static final long MISS_TTL = 10L * 60 * 1000;
 
     /** 一次取词的等待上限；超时就先用已经拿到的结果 */
-    private static final long FIRST_WAIT_MS = 6000L;
+    private static final long FIRST_WAIT_MS = 4000L;
+
+    /** 伪 provider：mediaId 当网易云 id 直取（跟其他源一起并行） */
+    private static final String ID_PROVIDER = "@id";
 
     private static final ExecutorService FETCH_EXEC = Executors.newFixedThreadPool(4, runnable -> {
         Thread t = new Thread(runnable, "LyricPatch-fetch");
@@ -131,6 +134,9 @@ public final class LyricFetcher {
                                    long durationMs, String packageName, String mediaId,
                                    boolean withTranslation) {
         try {
+            if (ID_PROVIDER.equals(provider)) {
+                return Netease.byIdVerified(mediaId, title, withTranslation);
+            }
             if (Providers.isNetease(provider)) {
                 return Netease.search(title, artist, durationMs, withTranslation);
             }
@@ -231,34 +237,25 @@ public final class LyricFetcher {
         Entry cached = CACHE.get(key);
         if (cached != null && cached.expireAt > now) return cached.bundle;
 
-        Bundle bundle = null;
-
-        // 1) mediaId 是纯数字：直接当网易云歌曲 id 试（带标题校验，避免串歌）
-        if (isNumeric(mediaId)) {
-            try {
-                bundle = Netease.byIdVerified(mediaId, title, withTranslation);
-            } catch (Throwable t) {
-                Util.logw("netease byId failed", t);
-            }
+        // 并行请求所有源，再按 providers 的原顺序挑第一个有结果的：
+        // 慢的源不会把快的挡住，顺序优先级又保留
+        String order = Util.conf(ConfKeys.PROVIDERS, "netease,lrclib");
+        if (!Util.isEmpty(sUpstream)) {
+            // 设置里填的 base（通常是音理/lyricon 的本地服务）优先，因为它们可能带 yrc
+            order = sUpstream.replace(';', ',') + "," + order;
+            Util.d("upstream first: " + sUpstream);
         }
 
-        // 2) 并行请求所有源，再按 providers 的原顺序挑第一个有结果的：
-        //    慢的源不会把快的挡住，顺序优先级又保留
-        if (bundle == null) {
-            String order = Util.conf(ConfKeys.PROVIDERS, "netease,lrclib");
-            if (!Util.isEmpty(sUpstream)) {
-                // 设置里填的 base（通常是音理/lyricon 的本地服务）优先，因为它们可能带 yrc
-                order = sUpstream.replace(';', ',') + "," + order;
-                Util.d("upstream first: " + sUpstream);
-            }
-            List<String> providers = new ArrayList<>();
-            for (String raw : order.split(",")) {
-                String provider = raw.trim();
-                if (!provider.isEmpty() && !providers.contains(provider)) providers.add(provider);
-            }
-            bundle = fetchFirst(providers, title, artist, album, durationMs,
-                    packageName, mediaId, withTranslation);
+        List<String> providers = new ArrayList<>();
+        // mediaId 是纯数字时，“按 id 直取”也当一个候选并行跑，不再串行地先等它
+        if (isNumeric(mediaId)) providers.add(ID_PROVIDER);
+        for (String raw : order.split(",")) {
+            String provider = raw.trim();
+            if (!provider.isEmpty() && !providers.contains(provider)) providers.add(provider);
         }
+
+        Bundle bundle = fetchFirst(providers, title, artist, album, durationMs,
+                packageName, mediaId, withTranslation);
 
         if (bundle != null && bundle.empty()) bundle = null;
 
@@ -269,6 +266,14 @@ public final class LyricFetcher {
                         + "» yrc=«" + firstLine(bundle.yrc) + "»");
             }
             dropTitleLine(bundle, title);
+        }
+
+        // 中文歌词不去要翻译（设置里可以关）。
+        // 只清 tlyric，不动歌词本身，跟“抹掉已有翻译”不是一回事。
+        if (bundle != null
+                && Util.confBool(ConfKeys.SKIP_TRANSLATION_FOR_CHINESE, true)
+                && Util.looksChinese(!Util.isEmpty(bundle.lrc) ? bundle.lrc : bundle.yrc)) {
+            bundle.tlyric = null;
         }
 
         // yrc 字段非空 ≠ 真逐字：有些源把纯行级歌词塞进 yrc，所以看有没有 (起,长,0) 词标签
