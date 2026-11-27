@@ -14,7 +14,8 @@ import java.util.TimeZone
 /**
  * 查 GitHub 上的版本有没有更新。
  *
- * - 正式版：比对 latest release 的 tag 与当前 versionName
+ * - 正式版：tag 里带 versionCode（如 v5.14(145)）就比 code，
+ *   没有括号才退回比对 versionName
  * - ci：ci 是个会被反复覆盖的预发布，没有版本号可比，
  *   只能拿它的 updated_at 和「当前 APK 的安装时间」比，安装之后又有 push 就算有新版
  */
@@ -22,6 +23,10 @@ object UpdateChecker {
 
     /** ci 发布正文里的 versionCode */
     private val RE_VERSION_CODE = Regex("versionCode\\s*[:：]\\s*(\\d+)")
+
+    /** 正式版 tag 可能带 versionCode：v5.14(145) */
+    private val RE_TAG_VERSION = Regex("""^[vV]?(\d+(?:\.\d+)*)""")
+    private val RE_TAG_CODE = Regex("""\((\d+)\)""")
 
     data class Release(val tag: String, val pageUrl: String) {
         val isCi: Boolean get() = tag == "ci"
@@ -34,18 +39,28 @@ object UpdateChecker {
             val ci = checkCi(current, currentCode, installedAt)
             if (ci != null) return@withContext ci
         }
-        checkLatest(current)
+        checkLatest(current, currentCode)
     }
 
-    private fun checkLatest(current: String): Release? {
+    private fun checkLatest(current: String, currentCode: Long): Release? {
         val json = getJson(GithubApi.LATEST, current) ?: return null
         return runCatching {
             val o = JSONObject(json)
             val tag = o.optString("tag_name", "")
             val page = o.optString("html_url", "")
-            val version = tag.removePrefix("v")
-            if (version.isEmpty() || page.isEmpty()) null
-            else if (isNewer(version, current)) Release(tag, page) else null
+            if (tag.isEmpty() || page.isEmpty()) return@runCatching null
+
+            val version = RE_TAG_VERSION.find(tag)?.groupValues?.getOrNull(1).orEmpty()
+            val code = RE_TAG_CODE.find(tag)?.groupValues?.getOrNull(1)?.toLongOrNull()
+
+            // tag 里的 versionCode 最准；没有才退回比较版本名。
+            // v5.14(145) 不能按 5.14(145) 这种版本名去比，会误报。
+            val newer = when {
+                code != null && currentCode > 0L -> code > currentCode
+                version.isNotEmpty() -> isNewer(version, current)
+                else -> false
+            }
+            if (newer) Release(tag, page) else null
         }.getOrNull()
     }
 
