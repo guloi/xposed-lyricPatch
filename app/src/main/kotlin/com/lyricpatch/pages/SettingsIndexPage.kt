@@ -5,11 +5,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -69,6 +68,6 @@ private fun iconOf(category: String): ImageVector = when (category) {
     "歌词" -> Icons.Filled.List
     "显示" -> Icons.Filled.Star
     "应用" -> Icons.Filled.Lock
-    "外观" -> Icons.Filled.Palette
+    "外观" -> Icons.Filled.Create
     else -> Icons.Filled.Info
 }
