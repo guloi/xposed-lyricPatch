@@ -2,6 +2,7 @@ package com.lyricpatch.pages
 
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,6 +23,7 @@ import com.lyricpatch.lib.ConfKeys
 import com.lyricpatch.lib.RowDivider
 import com.lyricpatch.lib.SettingsCard
 import com.lyricpatch.ui.ConfigSession
+import com.lyricpatch.ui.UiPrefs
 
 /**
  * 首页只做信息展示：模块状态、SystemUI 侧版本、配置文件、当前配置摘要。
@@ -29,6 +32,7 @@ import com.lyricpatch.ui.ConfigSession
 @Composable
 fun HomePage(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     val session = ConfigSession.also { it.attach(context) }
     val version = rememberPackageVersion()
 
@@ -38,8 +42,24 @@ fun HomePage(modifier: Modifier = Modifier) {
         "尚未写入"
     }
 
+    val background = if (UiPrefs.homeGradient) {
+        Brush.verticalGradient(
+            listOf(
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                MaterialTheme.colorScheme.background,
+            ),
+        )
+    } else {
+        null
+    }
+
+    Box(
+        modifier = modifier.fillMaxSize().then(
+            if (background != null) Modifier.background(background) else Modifier,
+        ),
+    ) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 8.dp, bottom = 28.dp),
     ) {
         item {
@@ -120,12 +140,21 @@ fun HomePage(modifier: Modifier = Modifier) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "github.com/guloi/xposed-lyricPatch",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    "Source code",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable {
+                            runCatching {
+                                uriHandler.openUri("https://github.com/guloi/xposed-lyricPatch")
+                            }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                 )
             }
         }
+    }
     }
 }
 

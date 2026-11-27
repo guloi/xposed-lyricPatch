@@ -5,10 +5,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,8 +22,7 @@ import com.lyricpatch.lib.RowDivider
 import com.lyricpatch.lib.SettingsCard
 
 /**
- * 设置入口页：只展示「歌词 / 显示 / 应用 / 模块」四个分类，
- * 点进各自分类后才是真正的设置项。
+ * 设置入口页：展示各个分类，点进分类才是具体设置项。
  */
 @Composable
 fun SettingsIndexPage(
@@ -66,7 +66,8 @@ fun SettingsIndexPage(
 
 private fun iconOf(category: String): ImageVector = when (category) {
     "歌词" -> Icons.Filled.List
-    "显示" -> Icons.Filled.Settings
+    "显示" -> Icons.Filled.Star
     "应用" -> Icons.Filled.Lock
+    "底边栏" -> Icons.Filled.Home
     else -> Icons.Filled.Info
 }

@@ -133,8 +133,10 @@ translation_providers=https://my.server
   保存完广播 `com.lyricpatch.CONFIG_CHANGED`，不用手动保存，也不用重启 SystemUI；
 - 首页只显示信息（状态、版本、配置文件、当前配置），不做入口；
   底部导航在「首页 / 设置」之间切换；
-- 设置页先列「歌词 / 显示 / 应用 / 模块」四个分类，点进分类才是具体设置；
-  「模块 → 其他设置 → 导出配置」用系统文件选择器保存 JSON（无需存储权限）。
+- 设置页先列「歌词 / 显示 / 应用 / 底边栏 / 模块」分类，点进分类才是具体设置；
+- 「底边栏」里放着外观、底栏样式和页面动画选项（莫奈取色 / 悬浮底栏 / MD3 底栏 /
+  首页背景渐变 / 切换与过渡动画 / 回弹幅度）；
+- 「模块 → 其他设置 → 导出配置」用系统文件选择器保存 JSON（无需存储权限）。
 
 ## 代码结构
 
@@ -144,7 +146,7 @@ app/src/main/java/com/lyricpatch/
 ├─ hook/       SystemUI 钩子实现：源代理、逐字长句滚动
 ├─ source/     歌词源与解析：网易云 / LRCLIB / QQ / 酷狗 / 自定义 HTTP / 翻译
 ├─ lib/        通用工具、接口地址、键名与可复用 UI 组件
-│  ├─ api.kt   外部歌词接口的地址与参数
+│  ├─ Api.kt   外部歌词接口的地址与参数
 │  └─ Util.java 网络、字符串归一化、配置读取与日志
 ├─ pages/      页面（一个页面一个文件，Activity 只做壳）
 └─ ui/         Activity / 主题 / 配置读写 / 崩溃记录
@@ -158,7 +160,7 @@ app/src/main/java/com/lyricpatch/
 4. 新增开关 / 配置项时，先看 `lib/Keys.kt` 和其他文件已有的声明方式，按同一规则补：
    面向 SystemUI 的写进 `ConfKeys`（同步 `ConfigStore.ORDER` / `DEFAULTS`），
    纯界面偏好写进 `UiKeys`；页面里一律用 `ConfKeys.XXX` 访问，不在调用点写字面量；
-5. 新增或修改第三方歌词接口时只改 `lib/api.kt`，请求与解析逻辑留在 `source/` 的源类里；
+5. 新增或修改第三方歌词接口时只改 `lib/Api.kt`，请求与解析逻辑留在 `source/` 的源类里；
    与 SystemUI 交互的代码放 `hook/`，通用工具放 `lib/`。
 
    

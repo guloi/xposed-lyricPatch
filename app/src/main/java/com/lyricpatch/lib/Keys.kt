@@ -41,15 +41,14 @@ object ConfKeys {
 object UiKeys {
     const val DYNAMIC_COLOR = "dynamic_color"
     const val ACCENT = "accent"
-    const val COLLAPSIBLE = "collapsible_sections"
-    const val COLLAPSE_BY_DEFAULT = "collapse_by_default"
-    const val SECTIONS_SEEN = "sections_seen"
     const val BOUNCE = "bounce_percent"
     const val COLOR_STYLE = "color_style"
     const val COLOR_SPEC = "color_spec"
-    const val SECTION_LEGACY_ANIM = "section_legacy_anim"
-    const val SECTION_HEADER_POP = "section_header_pop"
 
-    /** 每个大标题的折叠状态：section_<标题> */
-    const val SECTION_PREFIX = "section_"
+    const val BOTTOM_BAR_MD3 = "bottom_bar_md3"
+    const val FLOATING_BOTTOM_BAR = "floating_bottom_bar"
+    const val BOTTOM_BAR_LABELS = "bottom_bar_labels"
+    const val HOME_GRADIENT = "home_gradient"
+    const val TAB_ANIMATION = "tab_animation"
+    const val PAGE_TRANSITION = "page_transition"
 }

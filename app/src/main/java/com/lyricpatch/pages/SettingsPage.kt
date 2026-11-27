@@ -1,7 +1,5 @@
 package com.lyricpatch.pages
 
-import android.content.Intent
-import android.net.Uri
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,22 +8,18 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -35,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.*
 import com.lyricpatch.lib.debug.CrashLogger
-import com.lyricpatch.ui.AppearanceActivity
 import com.lyricpatch.ui.ConfigSession
 import com.lyricpatch.ui.ConfigStore
 import com.lyricpatch.ui.UiPrefs
@@ -93,21 +86,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
         }
     }
 
-    // 分组折叠状态存在 ui_prefs：第一次进入按「默认折叠」初始化并落盘，
-    // 之后每次进入都恢复上次的状态。放到 LaunchedEffect 里，避免在组合期间写磁盘。
-    LaunchedEffect(Unit) { UiPrefs.ensureSectionDefaults(SECTION_KEYS) }
-    val openSections = remember { mutableStateMapOf<String, Boolean>() }
-    val collapsible = UiPrefs.collapsible
     val visibleSections = catalog.sections
-
-    fun open(key: String): Boolean =
-        !collapsible || (openSections[key] ?: UiPrefs.sectionOpen(key))
-
-    fun toggle(key: String) {
-        val next = !open(key)
-        openSections[key] = next
-        UiPrefs.updateSectionOpen(key, next)
-    }
 
     val version = remember(context) {
         runCatching {
@@ -151,7 +130,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             title = { Text("恢复默认设置？") },
             text = {
                 Text(
-                    "歌词配置会写回默认 JSON，取色、折叠、动画也恢复默认。不能撤销。",
+                    "歌词配置会写回默认 JSON，取色、底栏和动画也恢复默认。不能撤销。",
                 )
             },
             confirmButton = {
@@ -159,9 +138,6 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                     onClick = {
                         session.reset()
                         UiPrefs.reset(context)
-                        // 重置后当前页也立即回到「默认折叠」，不用退出重进
-                        UiPrefs.ensureSectionDefaults(SECTION_KEYS)
-                        openSections.clear()
                         showReset = false
                         scope.launch { snackbar.showSnackbar("已恢复默认设置") }
                     },
@@ -234,12 +210,10 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                 SectionHeader(
                     "数据源",
                     "按顺序匹配，使用第一个返回歌词的源",
-                    expanded = open("数据源"),
-                    onToggle = if (collapsible) ({ toggle("数据源") }) else null,
                 )
             }
             item {
-                SectionBody(open("数据源")) {
+                SectionBody(true) {
                     SettingsCard {
                         FieldRow(
                             label = "providers",
@@ -268,12 +242,10 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                 SectionHeader(
                     "翻译",
                     "控制第二行显示内容",
-                    expanded = open("翻译"),
-                    onToggle = if (collapsible) ({ toggle("翻译") }) else null,
                 )
             }
             item {
-                SectionBody(open("翻译")) {
+                SectionBody(true) {
                     SettingsCard {
                         SwitchRow(
                             title = "translation",
@@ -331,12 +303,10 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                 SectionHeader(
                     "逐字",
                     "逐字来源与补充方式",
-                    expanded = open("逐字"),
-                    onToggle = if (collapsible) ({ toggle("逐字") }) else null,
                 )
             }
             item {
-                SectionBody(open("逐字")) {
+                SectionBody(true) {
                     SettingsCard {
                         SwitchRow(
                             title = "parse_word_formats",
@@ -402,12 +372,10 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                 SectionHeader(
                     "长句滚动",
                     "处理超出控件宽度的歌词行",
-                    expanded = open("长句滚动"),
-                    onToggle = if (collapsible) ({ toggle("长句滚动") }) else null,
                 )
             }
             item {
-                SectionBody(open("长句滚动")) {
+                SectionBody(true) {
                     SettingsCard {
                         SwitchRow(
                             title = "word_scroll",
@@ -422,8 +390,7 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                             checked = session.flag(ConfKeys.WORD_SCROLL_FOLLOW),
                             onCheckedChange = { session.setFlag(ConfKeys.WORD_SCROLL_FOLLOW, it) },
                         )
-                        val startOpen = remember { mutableStateOf(true) }
-                        // 只在开启「跟随」时出现；展开收起和全局用同一套弹簧
+                        // 只在开启「跟随」时出现
                         AnimatedVisibility(
                             visible = session.flag(ConfKeys.WORD_SCROLL_FOLLOW),
                             enter = expandVertically(animationSpec = bouncy()) +
@@ -433,27 +400,18 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         ) {
                             Column {
                                 RowDivider()
-                                // 子折叠：不受「大标题折叠」开关影响，也不参与分组状态落盘
-                                SubHeader(
-                                    title = "开始滚动的时机",
-                                    subtitle = "整句播放到第几成时开始跟随",
-                                    expanded = startOpen.value,
-                                    onToggle = { startOpen.value = !startOpen.value },
+                                SliderRow(
+                                    title = "word_scroll_start_pct",
+                                    subtitle = "开始跟随的时机，0 为自动",
+                                    value = session.number(ConfKeys.WORD_SCROLL_START_PCT),
+                                    range = 0f..90f,
+                                    steps = 17,
+                                    display = session.number(ConfKeys.WORD_SCROLL_START_PCT)
+                                        .let { if (it <= 0) "自动" else "${it}%" },
+                                    onChange = {
+                                        session.setNumber(ConfKeys.WORD_SCROLL_START_PCT, it)
+                                    },
                                 )
-                                SectionBody(startOpen.value) {
-                                    SliderRow(
-                                        title = "word_scroll_start_pct",
-                                        subtitle = "0 为自动（按一屏能装下多少算）",
-                                        value = session.number(ConfKeys.WORD_SCROLL_START_PCT),
-                                        range = 0f..90f,
-                                        steps = 17,
-                                        display = session.number(ConfKeys.WORD_SCROLL_START_PCT)
-                                            .let { if (it <= 0) "自动" else "${it}%" },
-                                        onChange = {
-                                            session.setNumber(ConfKeys.WORD_SCROLL_START_PCT, it)
-                                        },
-                                    )
-                                }
                             }
                         }
                         RowDivider()
@@ -486,36 +444,15 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
             }
             }
 
-                        if (category == "显示") {
-                item { Spacer(Modifier.height(10.dp)) }
-                item {
-                    SettingsCard {
-                        ActionRow(
-                            title = "外观",
-                            subtitle = "取色方式、大标题折叠、回弹与动画",
-                            icon = Icons.Filled.Settings,
-                            onClick = {
-                                context.startActivity(
-                                    Intent(context, AppearanceActivity::class.java),
-                                )
-                            },
-                        )
-                    }
-                    CardNote("改完立即生效。")
-                }
-            }
-
-            if ("应用过滤" in visibleSections) {
+                        if ("应用过滤" in visibleSections) {
             item {
                 SectionHeader(
                     "应用过滤",
                     "白名单和黑名单二选一",
-                    expanded = open("应用过滤"),
-                    onToggle = if (collapsible) ({ toggle("应用过滤") }) else null,
                 )
             }
             item {
-                SectionBody(open("应用过滤")) {
+                SectionBody(true) {
                     SettingsCard {
                         val white = session.raw(ConfKeys.APP_WHITELIST)
                         val black = session.raw(ConfKeys.APP_BLACKLIST)
@@ -546,12 +483,10 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                 SectionHeader(
                     "其他设置",
                     "导出和重置",
-                    expanded = open("其他设置"),
-                    onToggle = if (collapsible) ({ toggle("其他设置") }) else null,
                 )
             }
             item {
-                SectionBody(open("其他设置")) {
+                SectionBody(true) {
                     SettingsCard {
                         ActionRow(
                             title = "导出配置",
@@ -580,12 +515,10 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                 SectionHeader(
                     "调试",
                     "adb logcat -s LyricPatch",
-                    expanded = open("调试"),
-                    onToggle = if (collapsible) ({ toggle("调试") }) else null,
                 )
             }
             item {
-                SectionBody(open("调试")) {
+                SectionBody(true) {
                     SettingsCard {
                         // 没写过 log_level 的老配置：按 debug_log 推一个当前值显示
                         val currentLevel = session.raw(ConfKeys.LOG_LEVEL).ifBlank {
@@ -626,34 +559,12 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.outline,
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Source code",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable {
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(
-                                            Intent.ACTION_VIEW,
-                                            Uri.parse("https://github.com/guloi/xposed-lyricPatch"),
-                                        ),
-                                    )
-                                }
-                            }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
                 }
             }
         }
     }
 }
 
-private val SECTION_KEYS = listOf(
-    "数据源", "翻译", "逐字", "长句滚动", "应用过滤", "其他设置", "调试",
-)
 
 private val MACHINE_MODES = listOf(
     "auto" to "跟随 ROM",

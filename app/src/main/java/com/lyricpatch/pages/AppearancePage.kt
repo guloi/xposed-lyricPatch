@@ -1,10 +1,5 @@
 package com.lyricpatch.pages
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,7 +26,7 @@ import com.lyricpatch.lib.color.ColorSpec
 import com.lyricpatch.lib.color.ColorStyle
 import com.lyricpatch.ui.UiPrefs
 
-/** 外观页：取色方式 / 大标题折叠 / 回弹幅度 / 分组动画 */
+/** 底边栏设置：外观、底栏样式和页面动画 */
 @Composable
 fun AppearancePage(onBack: () -> Unit) {
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { inner ->
@@ -46,7 +41,7 @@ fun AppearancePage(onBack: () -> Unit) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
                 }
                 Spacer(Modifier.width(4.dp))
-                Text("外观", style = MaterialTheme.typography.titleLarge)
+                Text("底边栏设置", style = MaterialTheme.typography.titleLarge)
             }
 
             Spacer(Modifier.height(8.dp))
@@ -58,12 +53,10 @@ fun AppearancePage(onBack: () -> Unit) {
                     checked = UiPrefs.dynamicColor,
                     onCheckedChange = { UiPrefs.updateDynamicColor(it) },
                 )
-                // 和设置页的分组用同一套展开逻辑（内含首帧不播 / 不误触处理）
                 SectionBody(!UiPrefs.dynamicColor) {
                     RowDivider()
                     AccentPicker()
                 }
-                // 色彩风格 / 标准始终显示，不随莫奈取色开关隐藏
                 RowDivider()
                 ChoiceRow(
                     title = "色彩风格",
@@ -81,67 +74,69 @@ fun AppearancePage(onBack: () -> Unit) {
                     onSelect = { UiPrefs.updateColorSpec(ColorSpec.of(it)) },
                 )
             }
-            CardNote("关闭莫奈取色后，使用上方选定的颜色与风格作为主题色。")
+            CardNote("关闭莫奈取色后，用上面的颜色和风格。")
 
             Spacer(Modifier.height(16.dp))
 
             SettingsCard {
                 SwitchRow(
-                    title = "大标题折叠",
-                    subtitle = "点击大标题可收起该分组",
-                    checked = UiPrefs.collapsible,
-                    onCheckedChange = { UiPrefs.updateCollapsible(it) },
+                    title = "MD3 样式底栏",
+                    subtitle = "关闭后换成普通图标底栏",
+                    checked = UiPrefs.bottomBarMd3,
+                    onCheckedChange = { UiPrefs.updateBottomBarMd3(it) },
+                )
+                RowDivider()
+                SwitchRow(
+                    title = "悬浮底栏",
+                    subtitle = "底栏浮在页面底部，不贴边",
+                    checked = UiPrefs.floatingBottomBar,
+                    onCheckedChange = { UiPrefs.updateFloatingBottomBar(it) },
+                )
+                RowDivider()
+                SwitchRow(
+                    title = "显示底栏文字",
+                    subtitle = "关闭后只显示图标",
+                    checked = UiPrefs.bottomBarLabels,
+                    onCheckedChange = { UiPrefs.updateBottomBarLabels(it) },
+                )
+                RowDivider()
+                SwitchRow(
+                    title = "首页背景渐变",
+                    subtitle = "首页背景从主题色淡出到普通背景",
+                    checked = UiPrefs.homeGradient,
+                    onCheckedChange = { UiPrefs.updateHomeGradient(it) },
                 )
             }
-            CardNote("关闭后恢复为固定标题样式，所有分组始终展开。")
-
-            // 只在开启「大标题折叠」时出现
-            SectionBody(UiPrefs.collapsible) {
-                Spacer(Modifier.height(16.dp))
-                SettingsCard {
-                    SwitchRow(
-                        title = "首次打开默认折叠",
-                        subtitle = "只在第一次启动应用时生效",
-                        checked = UiPrefs.collapseByDefault,
-                        onCheckedChange = { UiPrefs.updateCollapseByDefault(it) },
-                    )
-                }
-                CardNote("仅决定进入页面时的初始状态，手动展开的分组不会写回。")
-            }
+            CardNote("改完立即生效。")
 
             Spacer(Modifier.height(16.dp))
 
             SettingsCard {
+                SwitchRow(
+                    title = "首页切换动画",
+                    subtitle = "首页和设置之间切换时淡入淡出",
+                    checked = UiPrefs.tabAnimation,
+                    onCheckedChange = { UiPrefs.updateTabAnimation(it) },
+                )
+                RowDivider()
+                SwitchRow(
+                    title = "页面过渡动画",
+                    subtitle = "打开设置分类时淡入",
+                    checked = UiPrefs.pageTransition,
+                    onCheckedChange = { UiPrefs.updatePageTransition(it) },
+                )
+                RowDivider()
                 SliderRow(
                     title = "回弹幅度",
-                    subtitle = "折叠、开关、箭头弹一下的幅度，0 为关闭",
+                    subtitle = "开关和图标弹一下的幅度，0 为关闭",
                     value = UiPrefs.bouncePercent,
                     range = 0f..30f,
                     steps = 29,
                     display = if (UiPrefs.bouncePercent <= 0) "关闭" else "${UiPrefs.bouncePercent}%",
                     onChange = { UiPrefs.updateBounce(it) },
                 )
-                RowDivider()
-                SwitchRow(
-                    title = "大标题跳动",
-                    subtitle = "点击大标题时整块卡片弹一下",
-                    checked = UiPrefs.sectionHeaderPop,
-                    onCheckedChange = { UiPrefs.updateSectionHeaderPop(it) },
-                )
-                RowDivider()
-                SwitchRow(
-                    title = "弹簧式展开",
-                    subtitle = "展开用弹簧曲线，关闭则用匀速过渡",
-
-                    checked = UiPrefs.sectionLegacyAnim,
-                    onCheckedChange = { UiPrefs.updateSectionLegacyAnim(it) },
-                )
             }
-            CardNote("只影响界面动画，不影响歌词显示。")
-
-            Spacer(Modifier.height(16.dp))
-
-            CardNote("外观偏好点击即生效并写入 ui_prefs；歌词配置在设置页里也是改动即保存。")
+            CardNote("只影响界面动画，不影响歌词。")
 
             Spacer(Modifier.height(24.dp))
         }
