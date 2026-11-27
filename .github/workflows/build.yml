@@ -95,7 +95,14 @@ jobs:
           name: LyricPatch-apk
           path: app/build/outputs/apk/release/*.apk
 
-      # 分支 push / 手动运行但没填 tag：覆盖同一个 ci 预发布
+      # 分支 push / 手动运行但没填 tag：先删掉旧的 ci（含 tag），再传新的
+      - name: Delete old ci release
+        if: github.ref_type == 'branch' && steps.tag.outputs.name == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # 首次没有 ci 时 gh 会返回非 0，忽略就好
+        run: gh release delete ci --yes --cleanup-tag || true
+
       - name: Publish CI build
         if: github.ref_type == 'branch' && steps.tag.outputs.name == ''
         uses: softprops/action-gh-release@v2

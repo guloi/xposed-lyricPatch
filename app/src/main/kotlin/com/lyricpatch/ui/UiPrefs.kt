@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import com.lyricpatch.lib.UiKeys
 import com.lyricpatch.lib.color.ColorSpec
 import com.lyricpatch.lib.color.ColorStyle
+import org.json.JSONObject
 
 /**
  * 纯界面偏好，和给 SystemUI 看的 lyricpatch.json 分开存。
@@ -143,6 +144,59 @@ object UiPrefs {
     fun updateUpdateCheckCi(on: Boolean) {
         updateCheckCi = on
         prefs?.edit()?.putBoolean(UiKeys.UPDATE_CHECK_CI, on)?.apply()
+    }
+
+    /** 导出用：把当前外观/动画偏好写成 JSON */
+    fun toJson(): JSONObject = JSONObject().apply {
+        put(UiKeys.DYNAMIC_COLOR, dynamicColor)
+        put(UiKeys.ACCENT, accent)
+        put(UiKeys.BOUNCE, bouncePercent)
+        put(UiKeys.COLOR_STYLE, colorStyle.name)
+        put(UiKeys.COLOR_SPEC, colorSpec.name)
+        put(UiKeys.BOTTOM_BAR_MD3, bottomBarMd3)
+        put(UiKeys.FLOATING_BOTTOM_BAR, floatingBottomBar)
+        put(UiKeys.BOTTOM_BAR_LABELS, bottomBarLabels)
+        put(UiKeys.HOME_GRADIENT, homeGradient)
+        put(UiKeys.TAB_ANIMATION, tabAnimation)
+        put(UiKeys.PAGE_TRANSITION, pageTransition)
+        put(UiKeys.UPDATE_CHECK, updateCheck)
+        put(UiKeys.UPDATE_CHECK_CI, updateCheckCi)
+    }
+
+    /** 导入用：缺的字段保留当前值 */
+    fun fromJson(o: JSONObject) {
+        dynamicColor = o.optBoolean(UiKeys.DYNAMIC_COLOR, dynamicColor)
+        accent = o.optString(UiKeys.ACCENT, accent)
+        bouncePercent = o.optInt(UiKeys.BOUNCE, bouncePercent).coerceIn(0, 30)
+        colorStyle = ColorStyle.of(o.optString(UiKeys.COLOR_STYLE, null))
+        colorSpec = ColorSpec.of(o.optString(UiKeys.COLOR_SPEC, null))
+        bottomBarMd3 = o.optBoolean(UiKeys.BOTTOM_BAR_MD3, bottomBarMd3)
+        floatingBottomBar = o.optBoolean(UiKeys.FLOATING_BOTTOM_BAR, floatingBottomBar)
+        bottomBarLabels = o.optBoolean(UiKeys.BOTTOM_BAR_LABELS, bottomBarLabels)
+        homeGradient = o.optBoolean(UiKeys.HOME_GRADIENT, homeGradient)
+        tabAnimation = o.optBoolean(UiKeys.TAB_ANIMATION, tabAnimation)
+        pageTransition = o.optBoolean(UiKeys.PAGE_TRANSITION, pageTransition)
+        updateCheck = o.optBoolean(UiKeys.UPDATE_CHECK, updateCheck)
+        updateCheckCi = o.optBoolean(UiKeys.UPDATE_CHECK_CI, updateCheckCi)
+        persist()
+    }
+
+    private fun persist() {
+        prefs?.edit()?.apply {
+            putBoolean(UiKeys.DYNAMIC_COLOR, dynamicColor)
+            putString(UiKeys.ACCENT, accent)
+            putInt(UiKeys.BOUNCE, bouncePercent)
+            putString(UiKeys.COLOR_STYLE, colorStyle.name)
+            putString(UiKeys.COLOR_SPEC, colorSpec.name)
+            putBoolean(UiKeys.BOTTOM_BAR_MD3, bottomBarMd3)
+            putBoolean(UiKeys.FLOATING_BOTTOM_BAR, floatingBottomBar)
+            putBoolean(UiKeys.BOTTOM_BAR_LABELS, bottomBarLabels)
+            putBoolean(UiKeys.HOME_GRADIENT, homeGradient)
+            putBoolean(UiKeys.TAB_ANIMATION, tabAnimation)
+            putBoolean(UiKeys.PAGE_TRANSITION, pageTransition)
+            putBoolean(UiKeys.UPDATE_CHECK, updateCheck)
+            putBoolean(UiKeys.UPDATE_CHECK_CI, updateCheckCi)
+        }?.apply()
     }
 
     /** 完整重置界面偏好：清掉 ui_prefs，并把内存里的状态恢复默认 */

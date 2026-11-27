@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.*
 import com.lyricpatch.lib.debug.CrashLogger
+import com.lyricpatch.ui.ConfigPack
 import com.lyricpatch.ui.ConfigSession
 import com.lyricpatch.lib.list.LOG_LEVELS
 import com.lyricpatch.lib.list.MACHINE_MODES
@@ -106,58 +107,79 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
 
     // 导出到用户选择的位置（SAF），不需要存储权限
     val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json"),
+        ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val text = ConfigStore.serialize(
+                val conf = ConfigStore.serialize(
                     ConfigSession.values.toMap(),
                     version,
                     System.currentTimeMillis(),
                 )
+                val ui = UiPrefs.toJson().toString(2)
                 val ok = withContext(Dispatchers.IO) {
                     runCatching {
                         context.contentResolver.openOutputStream(uri)?.use { out ->
-                            out.write(text.toByteArray(Charsets.UTF_8))
-                            out.flush()
+                            ConfigPack.write(out, conf, ui)
                         } ?: error("无法创建文件")
                     }.isSuccess
                 }
-                snackbar.showSnackbar(if (ok) "已导出配置" else "导出失败：无法写入所选文件")
+                snackbar.showSnackbar(if (ok) "已导出配置（含外观）" else "导出失败：无法写入所选文件")
             }
         }
     }
 
     fun launchExport() {
         val stamp = DateFormat.format("yyyyMMdd-HHmm", System.currentTimeMillis())
-        exportLauncher.launch("lyricpatch-$stamp.json")
+        exportLauncher.launch("lyricpatch-$stamp.zip")
     }
 
-    // 导入：选一份 JSON，只认已登记的键，整份替换
+    // 导入：支持新版 zip（配置 + 外观）与旧的纯 JSON
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val text = withContext(Dispatchers.IO) {
+            val bytes = withContext(Dispatchers.IO) {
                 runCatching {
-                    context.contentResolver.openInputStream(uri)?.use {
-                        it.readBytes().toString(Charsets.UTF_8)
-                    }
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 }.getOrNull()
             }
-            val imported = text?.let { ConfigStore.parseImported(it) }
+            if (bytes == null) {
+                snackbar.showSnackbar("导入失败：读不到文件")
+                return@launch
+            }
+
+            val pack = if (ConfigPack.isZip(bytes)) {
+                withContext(Dispatchers.IO) {
+                    ConfigPack.read(java.io.ByteArrayInputStream(bytes))
+                }
+            } else {
+                emptyMap()
+            }
+
+            val confText = pack[ConfigPack.CONF_ENTRY] ?: bytes.toString(Charsets.UTF_8)
+            val imported = ConfigStore.parseImported(confText)
             if (imported == null) {
                 snackbar.showSnackbar("导入失败：不是有效的配置文件")
-            } else {
-                session.replaceAll(imported)
-                snackbar.showSnackbar("已导入 ${imported.size} 项")
+                return@launch
             }
+            session.replaceAll(imported)
+
+            val uiText = pack[ConfigPack.UI_ENTRY]
+            val uiApplied = uiText != null && runCatching {
+                UiPrefs.fromJson(org.json.JSONObject(uiText))
+            }.isSuccess
+
+            snackbar.showSnackbar(
+                if (uiApplied) "已导入 ${imported.size} 项配置和外观设置"
+                else "已导入 ${imported.size} 项配置",
+            )
         }
     }
 
     fun launchImport() {
-        importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+        importLauncher.launch(arrayOf("application/zip", "application/json", "text/plain", "*/*"))
     }
 
     fun checkUpdate() {
@@ -587,14 +609,14 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                     RowDivider()
                     ActionRow(
                         title = "导入配置",
-                        subtitle = "从 JSON 文件恢复，只认已登记的项",
+                        subtitle = "从 zip / JSON 恢复，包含外观设置",
                         icon = Icons.Filled.Refresh,
                         onClick = { launchImport() },
                     )
                     RowDivider()
                     ActionRow(
                         title = "导出配置",
-                        subtitle = "存成 JSON，可以备份或手改",
+                        subtitle = "配置 + 外观，存成 zip",
                         icon = Icons.Filled.Share,
                         onClick = { launchExport() },
                     )
