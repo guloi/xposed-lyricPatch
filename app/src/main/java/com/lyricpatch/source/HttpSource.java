@@ -37,8 +37,20 @@ public final class HttpSource {
                     Util.enc(pkg == null ? "" : pkg),
                     Util.enc(mediaId == null ? "" : mediaId));
 
-            String res = Util.get(url, null);
+            // 带上 fmt=ttml：支持的服务（音理/ler）直接回 TTML，能拿到真逐字；
+            // 不支持的会忽略这个参数，照旧回 JSON，所以不会多一次请求。
+            String res = Util.get(url + "&fmt=ttml", null);
             if (Util.isEmpty(res)) return null;
+
+            String head = res.trim();
+            if (head.startsWith("<?xml") || head.startsWith("<tt")) {
+                LyricFetcher.Bundle ttml = Ttml.parse(res, withTranslation);
+                if (ttml != null && !ttml.empty()) {
+                    Util.i("http ttml hit: " + base + " yrc=" + len(ttml.yrc));
+                    return ttml;
+                }
+                Util.d("http ttml empty, fallback to json: " + base);
+            }
 
             JSONObject o = new JSONObject(res);
             LyricFetcher.Bundle b = new LyricFetcher.Bundle();
