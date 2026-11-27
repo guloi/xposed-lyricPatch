@@ -3,19 +3,13 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- LSPosed 模块列表里的“描述”读的是 android:description，不是meta-data -->
+    <!-- 应用描述：系统设置和模块列表都会显示 -->
     <application
         android:label="@string/app_name"
         android:description="@string/app_desc"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:hasCode="true">
-
-        <!-- 旧式 LSPosed 识别用，保留兼容 -->
-        <meta-data android:name="xposedmodule" android:value="true" />
-        <meta-data android:name="xposeddescription"
-            android:value="@string/app_desc" />
-        <meta-data android:name="xposedminversion" android:value="102" />
 
         <!-- 配置出入口：内部存储的文件只读地给 SystemUI 取（不设权限，设了它拿不到） -->
         <provider

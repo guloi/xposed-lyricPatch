@@ -74,8 +74,11 @@ jobs:
         id: ver
         shell: bash
         run: |
-          code=$(grep -oP 'versionCode\s+\K[0-9]+' app/build.gradle | head -1)
-          name=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle | head -1)
+          # 版本号唯一来源是 lib/Version.java（build.gradle 也是从它读的）
+          ver=app/src/main/java/com/lyricpatch/lib/Version.java
+          code=$(sed -n 's/.*CODE[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$ver" | head -1)
+          name=$(sed -n 's/.*NAME[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$ver" | head -1)
+          echo "read versionCode=$code versionName=$name"
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
 

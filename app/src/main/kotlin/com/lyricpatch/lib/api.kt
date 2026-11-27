@@ -1,19 +1,31 @@
 package com.lyricpatch.lib
 
 /**
- * 模块用到的外部歌词接口。
+ * 模块用到的外部接口（歌词源 + 更新检查）。
  *
- * 只放“地址 / 参数 / 字段名”这类外部契约，请求、重试、解析仍然留在各自的源类里：
+ * 只放“地址 / 参数 / 字段名”这类外部契约，请求、重试、解析仍然留在各自的调用处：
  *  - [NeteaseApi]     网易云
  *  - [LrcLibApi]      LRCLIB（网易云源里当备用源用）
  *  - [QQMusicApi]     QQ 音乐
  *  - [KugouApi]       酷狗（KRC 逐字）
  *  - [HttpLyricApi]   自定义 HTTP 源 / 翻译源共用的协议
  *  - [TranslationApi] 自定义翻译 URL 的占位符
+ *  - [GithubApi]      GitHub Releases（设置页检查更新）
  *
  * 改了接口地址、加了参数，只需要动这个文件。Java 侧直接引用这些 `const val`
  *（Kotlin 会编译成 public static final 字段）。
  */
+
+/** GitHub Releases：设置页「检查更新」用，公开只读接口 */
+object GithubApi {
+    const val BASE =
+        "https://api.github.com/repos/guloi/xposed-lyricPatch/releases"
+
+    const val LATEST = "$BASE/latest"
+
+    /** ci 发布会反复覆盖，多取几条才翻得到它 */
+    const val LIST = "$BASE?per_page=10"
+}
 
 object NeteaseApi {
     const val REFERER = "https://music.163.com/"

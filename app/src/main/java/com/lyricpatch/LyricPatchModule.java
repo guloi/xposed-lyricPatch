@@ -4,6 +4,7 @@ import android.content.Context;
 import com.lyricpatch.hook.LyricScroll;
 import com.lyricpatch.hook.LyricSourceProxy;
 import com.lyricpatch.lib.ConfKeys;
+import com.lyricpatch.lib.Version;
 import com.lyricpatch.lib.Util;
 import com.lyricpatch.source.LyricFetcher;
 import android.graphics.Canvas;
@@ -42,7 +43,8 @@ public final class LyricPatchModule extends XposedModule {
     private static final String TAG = "LyricPatch";
 
     /** 日志里会打出来，方便确认装的是哪一版 */
-    private static final String VERSION = "5.13";
+    /** 版本号只在这里取：lib/Version.java 是全项目唯一来源 */
+    private static final String VERSION = Version.NAME;
     private static final String CLS_FACTORY =
             "com.android.systemui.statusbar.phone.LyricSourceFactory";
 
@@ -956,7 +958,7 @@ public final class LyricPatchModule extends XposedModule {
      *   machine_translation=off      永不机翻（源没翻译的歌第二行就是空白）
      * 老键 prefer_source_translation / disable_machine_translation 仍兼容，等价 source / off。
      *
-     * 只影响「第二行显示什么」，取词逻辑不变；默认 auto，完全不碰 ROM 原本行为。
+     * 只影响「第二行显示什么」，取词逻辑不变；默认 source（源优先）。
      */
     private void hookTranslator(ClassLoader cl) {
         try {
@@ -1026,7 +1028,7 @@ public final class LyricPatchModule extends XposedModule {
         if (Util.confBool("prefer_source_translation", false)) return MODE_SOURCE;
         if (Util.confBool("disable_machine_translation", false)) return MODE_OFF;
 
-        String mode = Util.conf(ConfKeys.MACHINE_TRANSLATION, MODE_AUTO).toLowerCase(Locale.ROOT);
+        String mode = Util.conf(ConfKeys.MACHINE_TRANSLATION, MODE_SOURCE).toLowerCase(Locale.ROOT);
         if (MODE_SOURCE.equals(mode)) return MODE_SOURCE;
         if (MODE_OFF.equals(mode)) return MODE_OFF;
         return MODE_AUTO;

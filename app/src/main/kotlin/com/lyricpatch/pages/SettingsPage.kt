@@ -539,12 +539,12 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
                         SliderRow(
                             title = "开始前停留",
                             subtitle = "开始滚动前的停留时间",
-                            value = delayMs / 100,
-                            range = 0f..20f,
+                            value = delayMs,
+                            range = 0f..2000f,
                             steps = 19,
                             display = "${delayMs}ms",
                             onChange = {
-                                session.setNumber(ConfKeys.WORD_SCROLL_DELAY, it * 100)
+                                session.setNumber(ConfKeys.WORD_SCROLL_DELAY, it)
                             },
                         )
                     }

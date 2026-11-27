@@ -1,5 +1,6 @@
 package com.lyricpatch.ui
 
+import com.lyricpatch.lib.GithubApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -19,11 +20,6 @@ import java.util.TimeZone
  */
 object UpdateChecker {
 
-    private const val BASE =
-        "https://api.github.com/repos/guloi/xposed-lyricPatch/releases"
-    private const val LATEST = "$BASE/latest"
-    private const val LIST = "$BASE?per_page=10"
-
     /** ci 发布正文里的 versionCode */
     private val RE_VERSION_CODE = Regex("versionCode\\s*[:：]\\s*(\\d+)")
 
@@ -42,7 +38,7 @@ object UpdateChecker {
     }
 
     private fun checkLatest(current: String): Release? {
-        val json = getJson(LATEST, current) ?: return null
+        val json = getJson(GithubApi.LATEST, current) ?: return null
         return runCatching {
             val o = JSONObject(json)
             val tag = o.optString("tag_name", "")
@@ -55,7 +51,7 @@ object UpdateChecker {
 
     /** ci 构建正文里带着 versionCode，比数字最准 */
     private fun checkCi(current: String, currentCode: Long, installedAt: Long): Release? {
-        val json = getJson(LIST, current) ?: return null
+        val json = getJson(GithubApi.LIST, current) ?: return null
         return runCatching {
             val arr = JSONArray(json)
             for (i in 0 until arr.length()) {

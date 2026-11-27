@@ -3,6 +3,36 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+// 版本号只有一个来源：src/main/java/com/lyricpatch/lib/Version.java
+// 改版本只改那里，这里自动读，不用两处同步
+def versionSource = file('src/main/java/com/lyricpatch/lib/Version.java').text
+def appVersionCode = (versionSource =~ /CODE\s*=\s*(\d+)/)[0][1] as int
+def appVersionName = (versionSource =~ /NAME\s*=\s*"([^"]+)"/)[0][1]
+
+// module.prop 是 LSPosed 读的模块信息，version 也从 Version.java 注入。
+// 构建前自动同步（内容一样就不写），不用手动改第二处。
+def modulePropFile = file('src/main/resources/META-INF/xposed/module.prop')
+tasks.register('syncModulePropVersion') {
+    def versionName = appVersionName
+    doLast {
+        def lines = modulePropFile.readLines('UTF-8')
+        def index = lines.findIndexOf { it.startsWith('version=') }
+        def line = "version=$versionName"
+        if (index >= 0) {
+            lines[index] = line
+        } else {
+            lines << line
+        }
+        def updated = lines.join('\n') + '\n'
+        if (modulePropFile.getText('UTF-8') != updated) {
+            modulePropFile.write(updated, 'UTF-8')
+        }
+    }
+}
+tasks.matching { it.name == 'preBuild' }.configureEach {
+    dependsOn 'syncModulePropVersion'
+}
+
 android {
     namespace 'com.lyricpatch'
     // 跟 ROM 对齐：这台机子的 SystemUI 就是 SDK 37（Android 17）
@@ -18,8 +48,8 @@ android {
         applicationId "com.lyricpatch"
         minSdk 29
         targetSdk 37
-        versionCode 144
-        versionName "5.13"
+        versionCode appVersionCode
+        versionName appVersionName
     }
 
     buildFeatures {

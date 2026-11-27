@@ -94,7 +94,7 @@ object ConfigStore {
         ConfKeys.HIDE_INSTRUMENTAL to "true",
         ConfKeys.TRANSLATION to "true",
         ConfKeys.TRANSLATION_PROVIDERS to "netease",
-        ConfKeys.MACHINE_TRANSLATION to "auto",
+        ConfKeys.MACHINE_TRANSLATION to "source",
         ConfKeys.HIDE_EMPTY_TRANSLATION to "true",
         ConfKeys.HIDE_TRANSLATION_ALWAYS to "false",
         ConfKeys.SKIP_TRANSLATION_FOR_CHINESE to "true",
