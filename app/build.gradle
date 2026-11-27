@@ -26,10 +26,27 @@ android {
         compose true
     }
 
+    signingConfigs {
+        release {
+            // CI 里由 workflow 把 secrets 解码到 app/lyricpatch.jks；
+            // 本地没这些变量时保持未配置，下面的 debug 会兑底
+            def ks = System.getenv("KEYSTORE_FILE")
+            if (ks != null && file(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            // 有正式 key 就用它，否则退回 debug（fork / 无 secrets 时也能出包）
+            def ks = System.getenv("KEYSTORE_FILE")
+            signingConfig (ks != null && file(ks).exists())
+                    ? signingConfigs.release : signingConfigs.debug
         }
     }
 

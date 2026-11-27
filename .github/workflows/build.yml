@@ -2,7 +2,12 @@ name: build
 
 on:
   push:
+    branches: ['**']
+    tags: ['*']
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   apk:
@@ -22,6 +27,14 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME"
           ls "$ANDROID_HOME" || true
 
+      # 正式签名：把 repo-lyricPatchKey/lyricpatch.jks 转 base64 存进 secrets.KEYSTORE_BASE64。
+      # 没配 secret 时跳过，build.gradle 会退回 debug 签名。
+      - name: Decode keystore
+        if: env.KEYSTORE_BASE64 != ''
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > app/lyricpatch.jks
+
       # 仓库里 gradlew 没带可执行位，先补上，省得 setup-gradle 报校验警告
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -33,6 +46,11 @@ jobs:
 
       - name: Assemble
         shell: bash
+        env:
+          KEYSTORE_FILE: lyricpatch.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         # tee 一份到 build.log，同时靠 pipefail 保留 gradle 的退出码
         run: |
           set -o pipefail
@@ -63,3 +81,33 @@ jobs:
         with:
           name: LyricPatch-apk
           path: app/build/outputs/apk/release/*.apk
+
+      # 分支 push / 手动触发：覆盖同一个 ci 预发布，永远指向最新一次构建
+      - name: Publish CI build
+        if: github.ref_type == 'branch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci
+          name: CI 构建
+          prerelease: true
+          fail_on_unmatched_files: false
+          body: |
+            此为 CI 自动构建，不是正式发布版本。
+
+            提交：`${{ github.sha }}`
+            分支：`${{ github.ref_name }}`
+          files: app/build/outputs/apk/release/*.apk
+
+      # 打 tag：发正式 release，并设为 latest
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          make_latest: true
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          body: |
+            CI 预览版（每次 push 自动更新）：https://github.com/${{ github.repository }}/releases/tag/ci
+          files: app/build/outputs/apk/release/*.apk
