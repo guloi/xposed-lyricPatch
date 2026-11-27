@@ -191,10 +191,14 @@ fun SettingsPage(category: String, onBack: () -> Unit) {
         updateText = "检查中…"
         scope.launch {
             // 安装时间用来判断 ci 有没有比当前这份 APK 更新的构建
-            val installedAt = runCatching {
-                context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
-            }.getOrDefault(0L)
-            val release = UpdateChecker.check(version, installedAt, UiPrefs.updateCheckCi)
+            val info = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }.getOrNull()
+            val installedAt = info?.lastUpdateTime ?: 0L
+            val currentCode = info?.longVersionCode ?: 0L
+            val release = UpdateChecker.check(
+                version, currentCode, installedAt, UiPrefs.updateCheckCi,
+            )
             if (release == null) {
                 updateText = "已是最新版本"
             } else {

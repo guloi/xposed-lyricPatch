@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: '要发布的 tag（填了就发 latest，留空只更新 ci 预发布）'
+        description: 'tag'
         required: false
         type: string
 
@@ -69,6 +69,16 @@ jobs:
           set -o pipefail
           gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
+      # 把 versionCode / versionName 读出来，给 ci 发布正文用
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          code=$(grep -oP 'versionCode\s+\K[0-9]+' app/build.gradle | head -1)
+          name=$(grep -oP 'versionName\s+"\K[^"]+' app/build.gradle | head -1)
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
       # 失败时先把尾部打出来，Actions 页面不用下载就能看到关键报错
       - name: Build log tail
         if: failure()
@@ -118,6 +128,8 @@ jobs:
           body: |
             此为 CI 自动构建，不是正式发布版本。
 
+            versionCode: ${{ steps.ver.outputs.code }}
+            versionName: ${{ steps.ver.outputs.name }}
             提交：`${{ github.sha }}`
             分支：`${{ github.ref_name }}`
           files: app/build/outputs/apk/release/*.apk

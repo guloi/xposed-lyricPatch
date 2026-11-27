@@ -24,19 +24,22 @@ object UpdateChecker {
     private const val LATEST = "$BASE/latest"
     private const val LIST = "$BASE?per_page=10"
 
+    /** ci 发布正文里的 versionCode */
+    private val RE_VERSION_CODE = Regex("versionCode\\s*[:：]\\s*(\\d+)")
+
     data class Release(val tag: String, val pageUrl: String) {
         val isCi: Boolean get() = tag == "ci"
     }
 
     /** 有更新才返回，否则 null */
-    suspend fun check(current: String, installedAt: Long, includeCi: Boolean): Release? =
-        withContext(Dispatchers.IO) {
-            if (includeCi) {
-                val ci = checkCi(current, installedAt)
-                if (ci != null) return@withContext ci
-            }
-            checkLatest(current)
+    suspend fun check(current: String, currentCode: Long, installedAt: Long,
+                      includeCi: Boolean): Release? = withContext(Dispatchers.IO) {
+        if (includeCi) {
+            val ci = checkCi(current, currentCode, installedAt)
+            if (ci != null) return@withContext ci
         }
+        checkLatest(current)
+    }
 
     private fun checkLatest(current: String): Release? {
         val json = getJson(LATEST, current) ?: return null
@@ -50,8 +53,8 @@ object UpdateChecker {
         }.getOrNull()
     }
 
-    private fun checkCi(current: String, installedAt: Long): Release? {
-        if (installedAt <= 0L) return null
+    /** ci 构建正文里带着 versionCode，比数字最准 */
+    private fun checkCi(current: String, currentCode: Long, installedAt: Long): Release? {
         val json = getJson(LIST, current) ?: return null
         return runCatching {
             val arr = JSONArray(json)
@@ -59,9 +62,17 @@ object UpdateChecker {
                 val o = arr.optJSONObject(i) ?: continue
                 if (o.optString("tag_name") != "ci") continue
                 val page = o.optString("html_url", "")
+                if (page.isEmpty()) return null
+
+                val code = RE_VERSION_CODE
+                    .find(o.optString("body", ""))?.groupValues?.getOrNull(1)?.toLongOrNull()
+                if (code != null) {
+                    return if (currentCode > 0L && code > currentCode) Release("ci", page) else null
+                }
+
+                // 旧构建正文里没写 versionCode：退回 updated_at 比安装时间
                 val updated = parseIso(o.optString("updated_at", ""))
-                if (page.isEmpty() || updated <= 0L) return null
-                return if (updated > installedAt) Release("ci", page) else null
+                return if (installedAt > 0L && updated > installedAt) Release("ci", page) else null
             }
             null
         }.getOrNull()
