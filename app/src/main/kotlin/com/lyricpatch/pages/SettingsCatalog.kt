@@ -12,6 +12,11 @@ class SettingsCategory(
 
 val SETTINGS_CATEGORIES = listOf(
     SettingsCategory(
+        title = "全部",
+        subtitle = "列出全部设置(不包括外观)",
+        sections = listOf("数据源", "翻译","逐字","长句滚动","应用过滤","其他设置","调试"),
+    ),
+    SettingsCategory(
         title = "歌词",
         subtitle = "数据源和翻译",
         sections = listOf("数据源", "翻译"),

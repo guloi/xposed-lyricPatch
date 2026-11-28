@@ -66,6 +66,7 @@ fun SettingsIndexPage(
 }
 
 private fun iconOf(category: String): ImageVector = when (category) {
+    "全部" -> Icons.Filled.Tune
     "歌词" -> Icons.Filled.List
     "显示" -> Icons.Filled.Star
     "应用" -> Icons.Filled.Lock
