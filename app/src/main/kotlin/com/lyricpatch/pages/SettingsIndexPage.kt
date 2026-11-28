@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -21,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.lyricpatch.lib.ActionRow
 import com.lyricpatch.lib.RowDivider
 import com.lyricpatch.lib.SettingsCard
-import com.lyricpatch.ui.iamge.tune
+import com.lyricpatch.ui.image.TuneIcon
 
 /**
  * 设置入口页：展示各个分类，点进分类才是具体设置项。
@@ -67,7 +68,7 @@ fun SettingsIndexPage(
 }
 
 private fun iconOf(category: String): ImageVector = when (category) {
-    "全部" -> Icon(TuneIcon, null)
+    "全部" -> Icon(TuneIcon, contentDescription = null)
     "歌词" -> Icons.Filled.List
     "显示" -> Icons.Filled.Star
     "应用" -> Icons.Filled.Lock
