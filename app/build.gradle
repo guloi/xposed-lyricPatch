@@ -72,7 +72,12 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 全量裁剪：未用类/方法/字段全丢掉，Compose 的收益最大
+            minifyEnabled true
+            // 配合 R8 删掉未引用的 res（本项目 res 很小，顺手开）
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
             // 有正式 key 就用它，否则退回 debug（fork / 无 secrets 时也能出包）。
             // 注意必须用赋值：写成 signingConfig (... ? ...) Groovy 会当成方法调用，
             // 把 Boolean 当参数塞给 setSigningConfig，直接 ClassCastException。
@@ -112,9 +117,9 @@ dependencies {
     implementation 'androidx.compose.ui:ui-graphics'
     implementation 'androidx.compose.foundation:foundation'
     implementation 'androidx.compose.material3:material3'
-    // 只用到核心图标（箭头），别拉 icons-extended
     implementation 'androidx.compose.material:material-icons-core'
     implementation 'androidx.activity:activity-compose:1.9.3'
     implementation 'androidx.core:core-ktx:1.15.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 }
+
